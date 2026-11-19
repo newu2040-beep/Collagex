@@ -1,0 +1,91 @@
+<resources>
+    <string name="app_name">CollageX</string>
+    <string name="welcome_tagline">Create Stunning Collages with Your Memories</string>
+    <string name="welcome_google_cta">Continue with Google</string>
+    <string name="welcome_about_cta">About CollageX &amp; Privacy</string>
+    <string name="open_source_badge">Open Source · Free Forever</string>
+    <string name="open_source_banner_title">100% Free &amp; Open Source</string>
+    <string name="open_source_banner_subtitle">Made with care for everyone</string>
+
+    <string name="nav_home">Home</string>
+    <string name="nav_projects">Projects</string>
+    <string name="nav_create">Create Collage</string>
+    <string name="nav_exports">Exports</string>
+    <string name="nav_settings">Settings</string>
+
+    <string name="home_greeting_prefix">Hello,</string>
+    <string name="home_greeting_default">Creator!</string>
+    <string name="home_subtitle">Turn your photos into beautiful collages</string>
+    <string name="home_new_collage">New Collage</string>
+    <string name="home_start_creating">Start creating now</string>
+    <string name="home_quick_tools">Quick Tools</string>
+    <string name="home_recent_collages">Recent Collages</string>
+    <string name="action_see_all">See all</string>
+
+    <string name="tool_templates">Templates</string>
+    <string name="tool_gallery">Gallery</string>
+    <string name="tool_layout">Layout</string>
+    <string name="tool_tools">Tools</string>
+
+    <string name="editor_title">Edit Collage</string>
+    <string name="editor_export">Export</string>
+    <string name="editor_tab_layout">Layout</string>
+    <string name="editor_tab_border">Border</string>
+    <string name="editor_tab_background">Background</string>
+    <string name="editor_border_radius">Border Radius</string>
+    <string name="editor_border_spacing">Cell Spacing</string>
+    <string name="editor_border_padding">Canvas Padding</string>
+    <string name="editor_border_color">Border Color</string>
+    <string name="editor_tool_text">Text</string>
+    <string name="editor_tool_sticker">Sticker</string>
+    <string name="editor_tool_filter">Filter</string>
+    <string name="editor_tool_background">Background</string>
+    <string name="editor_tool_more">More</string>
+
+    <string name="custom_size_title">Custom Size</string>
+    <string name="custom_size_presets">Aspect Ratio Presets</string>
+    <string name="custom_size_dimensions">Custom Dimensions</string>
+    <string name="custom_size_width">Width</string>
+    <string name="custom_size_height">Height</string>
+    <string name="custom_size_dpi">Resolution (DPI)</string>
+    <string name="custom_size_orientation">Orientation</string>
+    <string name="custom_size_portrait">Portrait</string>
+    <string name="custom_size_landscape">Landscape</string>
+    <string name="custom_size_maintain_ratio">Maintain Aspect Ratio</string>
+    <string name="custom_size_extend_canvas">Extend Canvas</string>
+    <string name="custom_size_apply">Apply Changes</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_themes">Themes</string>
+    <string name="settings_dark_mode">Dark Mode</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_notifications">Notifications</string>
+    <string name="settings_about">About CollageX</string>
+    <string name="settings_help">Help &amp; Support</string>
+    <string name="settings_privacy">Privacy Policy</string>
+    <string name="settings_open_source">Open Source</string>
+    <string name="settings_sign_out">Sign Out</string>
+    <string name="settings_cloud_sync">Cloud Auto-Sync</string>
+    <string name="settings_strip_exif">Strip EXIF Metadata</string>
+    <string name="settings_default_dpi">Default Print DPI</string>
+    <string name="settings_delete_data">Delete Account Data</string>
+
+    <string name="export_title">Export Collage</string>
+    <string name="export_format">Format</string>
+    <string name="export_resolution">Output Resolution</string>
+    <string name="export_quality">Compression Quality</string>
+    <string name="export_transparent_bg">Transparent Background</string>
+    <string name="export_strip_exif">Strip EXIF Metadata</string>
+    <string name="export_save_gallery">Save to Gallery</string>
+    <string name="export_save_as">Save As…</string>
+    <string name="export_cancel">Cancel Export</string>
+
+    <string name="cd_back">Navigate back</string>
+    <string name="cd_profile">Open profile and settings</string>
+    <string name="cd_add_photos">Add photos to collage</string>
+    <string name="cd_lock_aspect">Toggle aspect ratio lock</string>
+    <string name="cd_undo">Undo last change</string>
+    <string name="cd_redo">Redo change</string>
+    <string name="cd_canvas_size">Open custom canvas size</string>
+    <string name="cd_close">Close</string>
+</resources>

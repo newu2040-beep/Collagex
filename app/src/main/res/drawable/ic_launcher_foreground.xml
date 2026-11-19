@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Top-left square tile -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,31h14c2.21,0 4,1.79 4,4v14c0,2.21 -1.79,4 -4,4H34c-2.21,0 -4,-1.79 -4,-4V35c0,-2.21 1.79,-4 4,-4z" />
+    <!-- Top-right tall tile -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M60,31h14c2.21,0 4,1.79 4,4v22c0,2.21 -1.79,4 -4,4H60c-2.21,0 -4,-1.79 -4,-4V35c0,-2.21 1.79,-4 4,-4z" />
+    <!-- Bottom-left tall tile -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,57h14c2.21,0 4,1.79 4,4v12c0,2.21 -1.79,4 -4,4H34c-2.21,0 -4,-1.79 -4,-4V61c0,-2.21 1.79,-4 4,-4z" />
+    <!-- Bottom-right square tile -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M60,65h14c2.21,0 4,1.79 4,4v4c0,2.21 -1.79,4 -4,4H60c-2.21,0 -4,-1.79 -4,-4v-4c0,-2.21 1.79,-4 4,-4z" />
+    <!-- Four-pointed sparkle star accent -->
+    <path
+        android:fillColor="#FFE8EE"
+        android:pathData="M78,24 L79.8,29.2 L85,31 L79.8,32.8 L78,38 L76.2,32.8 L71,31 L76.2,29.2 Z" />
+</vector>

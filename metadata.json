@@ -1,0 +1,6 @@
+{
+  "name": "CollageX",
+  "description": "Create, arrange, and export multi-photo collages with post-creation custom canvas sizing and cloud sync.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

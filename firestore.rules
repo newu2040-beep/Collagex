@@ -1,0 +1,246 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny all access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Shared primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    // Entity 1: UserProfile
+    function isValidUserProfile(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+             data.email is string && data.email.size() <= 200 &&
+             (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 500)) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // Entity 2: CollageProject
+    function isValidCanvasMap(c) {
+      return c is map &&
+             c.keys().hasAll(['width', 'height', 'unit', 'dpi', 'aspectLocked', 'resizeMode', 'orientation']) &&
+             c.keys().hasOnly(['width', 'height', 'unit', 'dpi', 'aspectLocked', 'resizeMode', 'orientation']) &&
+             c.width is number && c.width > 0 && c.width <= 20000 &&
+             c.height is number && c.height > 0 && c.height <= 20000 &&
+             c.unit is string && c.unit.size() <= 8 && c.unit in ['PX', 'IN', 'CM', 'MM', 'PT'] &&
+             c.dpi is int && c.dpi >= 36 && c.dpi <= 1200 &&
+             c.aspectLocked is bool &&
+             c.resizeMode is string && c.resizeMode.size() <= 16 && c.resizeMode in ['FIT', 'FILL', 'CROP', 'EXTEND'] &&
+             c.orientation is string && c.orientation.size() <= 16 && c.orientation in ['PORTRAIT', 'LANDSCAPE'];
+    }
+
+    function isValidBackgroundMap(b) {
+      return b is map &&
+             b.keys().hasAll(['type', 'primaryColor', 'secondaryColor', 'textureIntensity']) &&
+             b.keys().hasOnly(['type', 'primaryColor', 'secondaryColor', 'textureIntensity']) &&
+             b.type is string && b.type.size() <= 24 && b.type in ['SOLID', 'GRADIENT', 'IMAGE'] &&
+             b.primaryColor is int &&
+             b.secondaryColor is int &&
+             b.textureIntensity is number && b.textureIntensity >= 0 && b.textureIntensity <= 1;
+    }
+
+    function isValidBorderMap(br) {
+      return br is map &&
+             br.keys().hasAll(['cornerRadius', 'spacing', 'padding', 'color', 'shadowEnabled']) &&
+             br.keys().hasOnly(['cornerRadius', 'spacing', 'padding', 'color', 'shadowEnabled']) &&
+             br.cornerRadius is number && br.cornerRadius >= 0 && br.cornerRadius <= 120 &&
+             br.spacing is number && br.spacing >= 0 && br.spacing <= 80 &&
+             br.padding is number && br.padding >= 0 && br.padding <= 120 &&
+             br.color is int &&
+             br.shadowEnabled is bool;
+    }
+
+    function isValidCollageProject(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.schemaVersion is int && data.schemaVersion >= 1 && data.schemaVersion <= 10 &&
+             data.layoutType is string && data.layoutType.size() <= 32 &&
+             data.layoutType in ['GRID', 'ASYMMETRIC', 'MASONRY', 'BENTO', 'STRIP', 'MOSAIC', 'FREEFORM'] &&
+             data.photoCount is int && data.photoCount >= 0 && data.photoCount <= 200 &&
+             data.favorite is bool &&
+             data.archived is bool &&
+             data.revision is int && data.revision >= 1 && data.revision <= 1000000 &&
+             isValidCanvasMap(data.canvas) &&
+             isValidBackgroundMap(data.background) &&
+             isValidBorderMap(data.border) &&
+             data.layerSummaries is list && data.layerSummaries.size() <= 100 &&
+             (data.layerSummaries.size() == 0 || data.layerSummaries[0] is map) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // Entity 3: ExportRecord
+    function isValidExportRecord(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.projectId is string && data.projectId.size() >= 1 && data.projectId.size() <= 128 &&
+             data.projectTitle is string && data.projectTitle.size() >= 1 && data.projectTitle.size() <= 120 &&
+             data.format is string && data.format.size() <= 12 &&
+             data.format in ['JPEG', 'PNG', 'WEBP', 'TIFF', 'PDF'] &&
+             data.widthPx is int && data.widthPx >= 1 && data.widthPx <= 20000 &&
+             data.heightPx is int && data.heightPx >= 1 && data.heightPx <= 20000 &&
+             data.dpi is int && data.dpi >= 36 && data.dpi <= 1200 &&
+             data.fileSizeBytes is int && data.fileSizeBytes >= 0 &&
+             data.transparentBg is bool &&
+             data.status is string && data.status.size() <= 16 &&
+             data.status in ['COMPLETED', 'FAILED', 'CANCELLED'] &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    // Entity 4: UserPreferences
+    function isValidUserPreferences(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.themePalette is string && data.themePalette.size() <= 24 &&
+             data.themePalette in ['PASTEL_PINK', 'LAVENDER', 'MINT', 'PEACH', 'SKY_BLUE', 'NEUTRAL'] &&
+             data.darkMode is string && data.darkMode.size() <= 12 &&
+             data.darkMode in ['SYSTEM', 'LIGHT', 'DARK'] &&
+             data.languageCode is string && data.languageCode.size() >= 2 && data.languageCode.size() <= 10 &&
+             data.notificationsEnabled is bool &&
+             data.stripExifDefault is bool &&
+             data.defaultDpi is int && data.defaultDpi >= 36 && data.defaultDpi <= 1200 &&
+             data.defaultUnit is string && data.defaultUnit.size() <= 8 &&
+             data.defaultUnit in ['PX', 'IN', 'CM', 'MM', 'PT'] &&
+             data.cloudAutoSync is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // Collection: /users/{userId}
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'email', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'email', 'photoUrl', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'photoUrl', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Subcollection: /users/{userId}/projects/{projectId}
+      match /projects/{projectId} {
+        allow get: if isOwner(userId) && isValidId(projectId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(projectId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'title', 'schemaVersion', 'layoutType', 'photoCount',
+                           'favorite', 'archived', 'revision', 'canvas', 'background',
+                           'border', 'layerSummaries', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'title', 'schemaVersion', 'layoutType', 'photoCount',
+                           'favorite', 'archived', 'revision', 'canvas', 'background',
+                           'border', 'layerSummaries', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidCollageProject(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(projectId) &&
+                         isValidCollageProject(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         (
+                           // Action: full project save or canvas resize
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'title', 'schemaVersion', 'layoutType', 'photoCount',
+                             'favorite', 'archived', 'revision', 'canvas', 'background',
+                             'border', 'layerSummaries', 'updatedAt'
+                           ])
+                         );
+
+        allow delete: if isOwner(userId) && isValidId(projectId);
+      }
+
+      // Subcollection: /users/{userId}/exports/{exportId}
+      match /exports/{exportId} {
+        allow get: if isOwner(userId) && isValidId(exportId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(exportId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'projectId', 'projectTitle', 'format', 'widthPx',
+                           'heightPx', 'dpi', 'fileSizeBytes', 'transparentBg', 'status', 'createdAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'projectId', 'projectTitle', 'format', 'widthPx',
+                           'heightPx', 'dpi', 'fileSizeBytes', 'transparentBg', 'status', 'createdAt'
+                         ]) &&
+                         isValidExportRecord(incoming(), userId);
+
+        // Export records are terminal immutable history entries
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(exportId);
+      }
+
+      // Subcollection: /users/{userId}/preferences/{prefId}
+      match /preferences/{prefId} {
+        allow get: if isOwner(userId) && isValidId(prefId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(prefId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'themePalette', 'darkMode', 'languageCode',
+                           'notificationsEnabled', 'stripExifDefault', 'defaultDpi',
+                           'defaultUnit', 'cloudAutoSync', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'themePalette', 'darkMode', 'languageCode',
+                           'notificationsEnabled', 'stripExifDefault', 'defaultDpi',
+                           'defaultUnit', 'cloudAutoSync', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidUserPreferences(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(prefId) &&
+                         isValidUserPreferences(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'themePalette', 'darkMode', 'languageCode',
+                           'notificationsEnabled', 'stripExifDefault', 'defaultDpi',
+                           'defaultUnit', 'cloudAutoSync', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(prefId);
+      }
+    }
+  }
+}

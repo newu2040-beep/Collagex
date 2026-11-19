@@ -1,0 +1,274 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated CollageX user profile stored privately under users/{userId}.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name shown in greeting and Settings."
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address from Google Sign-In."
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "Optional profile avatar URL."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set on profile creation via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp updated via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["userId", "displayName", "email", "createdAt", "updatedAt"]
+    },
+    "CollageProject": {
+      "title": "CollageProject",
+      "description": "User-owned collage project metadata, canvas settings, styling, and bounded layer summaries.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "title": {
+          "type": "string",
+          "description": "Project title."
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "description": "Versioned project schema number."
+        },
+        "layoutType": {
+          "type": "string",
+          "enum": ["GRID", "ASYMMETRIC", "MASONRY", "BENTO", "STRIP", "MOSAIC", "FREEFORM"],
+          "description": "Active collage layout arrangement."
+        },
+        "photoCount": {
+          "type": "integer",
+          "description": "Number of photo items in the collage."
+        },
+        "favorite": {
+          "type": "boolean",
+          "description": "Whether the user favorited this collage."
+        },
+        "archived": {
+          "type": "boolean",
+          "description": "Whether the project is archived."
+        },
+        "revision": {
+          "type": "integer",
+          "description": "Monotonically increasing project revision for sync conflict tracking."
+        },
+        "canvas": {
+          "type": "object",
+          "description": "Native map of canvas width, height, unit, dpi, aspectLocked, resizeMode, and orientation."
+        },
+        "background": {
+          "type": "object",
+          "description": "Native map of background type, primaryColor, secondaryColor, and textureIntensity."
+        },
+        "border": {
+          "type": "object",
+          "description": "Native map of cornerRadius, spacing, padding, color, and shadowEnabled."
+        },
+        "layerSummaries": {
+          "type": "array",
+          "description": "Bounded list (max 100) of native maps summarizing project layers."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set on creation via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp updated via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "userId",
+        "title",
+        "schemaVersion",
+        "layoutType",
+        "photoCount",
+        "favorite",
+        "archived",
+        "revision",
+        "canvas",
+        "background",
+        "border",
+        "layerSummaries",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ExportRecord": {
+      "title": "ExportRecord",
+      "description": "Record of a rendered collage export job synced to the user's activity history.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "projectId": {
+          "type": "string",
+          "description": "ID of the exported collage project."
+        },
+        "projectTitle": {
+          "type": "string",
+          "description": "Display title of the exported project."
+        },
+        "format": {
+          "type": "string",
+          "enum": ["JPEG", "PNG", "WEBP", "TIFF", "PDF"],
+          "description": "Output image or document format."
+        },
+        "widthPx": {
+          "type": "integer",
+          "description": "Rendered pixel width."
+        },
+        "heightPx": {
+          "type": "integer",
+          "description": "Rendered pixel height."
+        },
+        "dpi": {
+          "type": "integer",
+          "description": "Target DPI metadata."
+        },
+        "fileSizeBytes": {
+          "type": "integer",
+          "description": "Output file size in bytes."
+        },
+        "transparentBg": {
+          "type": "boolean",
+          "description": "Whether alpha transparency was preserved."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["COMPLETED", "FAILED", "CANCELLED"],
+          "description": "Final export job outcome."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "userId",
+        "projectId",
+        "projectTitle",
+        "format",
+        "widthPx",
+        "heightPx",
+        "dpi",
+        "fileSizeBytes",
+        "transparentBg",
+        "status",
+        "createdAt"
+      ]
+    },
+    "UserPreferences": {
+      "title": "UserPreferences",
+      "description": "User appearance, unit, DPI, privacy, and sync settings.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "themePalette": {
+          "type": "string",
+          "enum": ["PASTEL_PINK", "LAVENDER", "MINT", "PEACH", "SKY_BLUE", "NEUTRAL"],
+          "description": "Selected visual accent palette."
+        },
+        "darkMode": {
+          "type": "string",
+          "enum": ["SYSTEM", "LIGHT", "DARK"],
+          "description": "Selected theme mode."
+        },
+        "languageCode": {
+          "type": "string",
+          "description": "Preferred UI language code."
+        },
+        "notificationsEnabled": {
+          "type": "boolean",
+          "description": "Whether user enabled notifications."
+        },
+        "stripExifDefault": {
+          "type": "boolean",
+          "description": "Whether sensitive EXIF metadata is stripped by default on export."
+        },
+        "defaultDpi": {
+          "type": "integer",
+          "description": "Default export and canvas DPI."
+        },
+        "defaultUnit": {
+          "type": "string",
+          "enum": ["PX", "IN", "CM", "MM", "PT"],
+          "description": "Default dimension unit."
+        },
+        "cloudAutoSync": {
+          "type": "boolean",
+          "description": "Whether local project edits automatically sync to Firestore."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp updated via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "userId",
+        "themePalette",
+        "darkMode",
+        "languageCode",
+        "notificationsEnabled",
+        "stripExifDefault",
+        "defaultDpi",
+        "defaultUnit",
+        "cloudAutoSync",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profile document keyed by Firebase Auth UID."
+    },
+    "/users/{userId}/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/CollageProject" },
+      "description": "User's synced collage projects."
+    },
+    "/users/{userId}/exports/{exportId}": {
+      "schema": { "$ref": "#/entities/ExportRecord" },
+      "description": "User's collage export history records."
+    },
+    "/users/{userId}/preferences/{prefId}": {
+      "schema": { "$ref": "#/entities/UserPreferences" },
+      "description": "User's synced app preferences (canonical document ID: main)."
+    }
+  }
+}
