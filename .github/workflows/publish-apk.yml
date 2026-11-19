@@ -1,0 +1,232 @@
+name: Build & Publish Debug APK Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Verify Java environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "JAVA_HOME=${JAVA_HOME:-<unset>}"
+          JAVA_VERSION_OUTPUT="$(java -version 2>&1)"
+          echo "$JAVA_VERSION_OUTPUT"
+
+          RAW_VERSION="$(printf '%s\n' "$JAVA_VERSION_OUTPUT" | sed -n 's/.*version "\([^"]*\)".*/\1/p' | head -n 1)"
+          if [ -z "$RAW_VERSION" ]; then
+            echo "::error::Failed to detect active Java version."
+            exit 1
+          fi
+
+          if [[ "$RAW_VERSION" == 1.* ]]; then
+            JAVA_MAJOR="$(printf '%s' "$RAW_VERSION" | cut -d'.' -f2)"
+          else
+            JAVA_MAJOR="$(printf '%s' "$RAW_VERSION" | cut -d'.' -f1)"
+          fi
+
+          if ! [[ "$JAVA_MAJOR" =~ ^[0-9]+$ ]] || [ "$JAVA_MAJOR" -lt 17 ]; then
+            echo "::error::Java 17 or newer is required, detected '${RAW_VERSION}'."
+            exit 1
+          fi
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Prepare debug keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYSTORE_PATH="./debug.keystore"
+
+          if [ ! -f "$KEYSTORE_PATH" ]; then
+            if [ -f "./debug.keystore.base64" ]; then
+              echo "Restoring project debug keystore from debug.keystore.base64..."
+              tr -d '\r\n' < ./debug.keystore.base64 | base64 -d > "$KEYSTORE_PATH"
+            else
+              echo "Generating temporary debug keystore with keytool..."
+              "${JAVA_HOME}/bin/keytool" -genkeypair \
+                -v \
+                -keystore "$KEYSTORE_PATH" \
+                -storepass android \
+                -alias androiddebugkey \
+                -keypass android \
+                -dname "CN=Android Debug,O=Android,C=US" \
+                -keyalg RSA \
+                -keysize 2048 \
+                -validity 10000 >/dev/null 2>&1
+            fi
+          fi
+
+          if [ ! -f "$KEYSTORE_PATH" ] || [ ! -s "$KEYSTORE_PATH" ]; then
+            echo "::error::Debug keystore is missing or empty."
+            exit 1
+          fi
+          echo "Debug keystore is ready."
+
+      - name: Accept Android SDK licenses
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -n "$SDK_DIR" ] && [ -x "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          fi
+
+      - name: Build debug APK
+        shell: bash
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+
+      - name: Verify compiled debug APK
+        id: verify_apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ ! -f "$APK_PATH" ] || [ ! -s "$APK_PATH" ]; then
+            echo "::error::Expected debug APK is missing or empty at ${APK_PATH}."
+            if [ -d "app/build/outputs/apk" ]; then
+              find app/build/outputs/apk -type f -name '*.apk' || true
+            fi
+            exit 1
+          fi
+
+          echo "Checking ZIP archive integrity..."
+          unzip -tq "$APK_PATH"
+
+          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          BUILD_TOOLS_DIR=""
+          if [ -n "$SDK_DIR" ] && [ -d "$SDK_DIR/build-tools" ]; then
+            BUILD_TOOLS_DIR="$(ls -d "$SDK_DIR"/build-tools/* 2>/dev/null | sort -V | tail -n 1 || true)"
+          fi
+
+          if [ -n "$BUILD_TOOLS_DIR" ] && [ -x "$BUILD_TOOLS_DIR/zipalign" ]; then
+            echo "Checking APK zipalign alignment..."
+            "$BUILD_TOOLS_DIR/zipalign" -c -v -P 16 4 "$APK_PATH" >/dev/null
+          fi
+
+          if [ -n "$BUILD_TOOLS_DIR" ] && [ -x "$BUILD_TOOLS_DIR/apksigner" ]; then
+            echo "Verifying APK cryptographic signature..."
+            "$BUILD_TOOLS_DIR/apksigner" verify --min-sdk-version 24 --verbose "$APK_PATH"
+          fi
+
+          APK_SIZE_BYTES="$(wc -c < "$APK_PATH" | tr -d '[:space:]')"
+          APK_SIZE_HUMAN="$(numfmt --to=iec-i --suffix=B "$APK_SIZE_BYTES" 2>/dev/null || echo "${APK_SIZE_BYTES} bytes")"
+          APK_SHA256="$(sha256sum "$APK_PATH" | awk '{print $1}')"
+
+          echo "apk_size_bytes=${APK_SIZE_BYTES}" >> "$GITHUB_OUTPUT"
+          echo "apk_size_human=${APK_SIZE_HUMAN}" >> "$GITHUB_OUTPUT"
+          echo "apk_sha256=${APK_SHA256}" >> "$GITHUB_OUTPUT"
+          echo "Verified genuine installable APK: ${APK_PATH} (${APK_SIZE_HUMAN}, SHA-256: ${APK_SHA256})"
+
+      - name: Upload debug APK artifact
+        id: upload_apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publish APK to GitHub Releases
+        id: publish_release
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APK_SIZE_BYTES: ${{ steps.verify_apk.outputs.apk_size_bytes }}
+          APK_SIZE_HUMAN: ${{ steps.verify_apk.outputs.apk_size_human }}
+          APK_SHA256: ${{ steps.verify_apk.outputs.apk_sha256 }}
+        run: |
+          set -euo pipefail
+          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+          RELEASE_TAG="debug-apk-build-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          RELEASE_TITLE="Debug APK Build #${GITHUB_RUN_NUMBER}"
+
+          gh --version
+
+          RELEASE_NOTES="$(cat <<EOF
+          Automatically compiled and verified Android debug APK built on GitHub Actions.
+
+          - **Release Tag:** \`${RELEASE_TAG}\`
+          - **Workflow Run:** #${GITHUB_RUN_NUMBER} (Attempt ${GITHUB_RUN_ATTEMPT})
+          - **Commit SHA:** \`${GITHUB_SHA}\`
+          - **APK Asset:** \`app-debug.apk\`
+          - **APK Size:** ${APK_SIZE_HUMAN} (${APK_SIZE_BYTES} bytes)
+          - **SHA-256:** \`${APK_SHA256}\`
+
+          Direct download URL (always points to the latest successful release):
+          https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/app-debug.apk
+          EOF
+          )"
+
+          gh release create "$RELEASE_TAG" "$APK_PATH" \
+            --target "${GITHUB_SHA}" \
+            --title "$RELEASE_TITLE" \
+            --notes "$RELEASE_NOTES" \
+            --latest
+
+      - name: Report APK download result
+        if: always() && steps.publish_release.outcome != 'skipped'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_OUTCOME: ${{ steps.publish_release.outcome }}
+          APK_SIZE_BYTES: ${{ steps.verify_apk.outputs.apk_size_bytes }}
+          APK_SIZE_HUMAN: ${{ steps.verify_apk.outputs.apk_size_human }}
+          APK_SHA256: ${{ steps.verify_apk.outputs.apk_sha256 }}
+        run: |
+          set -euo pipefail
+          RELEASE_TAG="debug-apk-build-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          DIRECT_URL="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/app-debug.apk"
+
+          if [ "$RELEASE_OUTCOME" = "success" ]; then
+            RELEASE_URL="$(gh release view "$RELEASE_TAG" --json url --jq .url)"
+            echo "Release Tag: ${RELEASE_TAG}"
+            echo "APK Size: ${APK_SIZE_HUMAN} (${APK_SIZE_BYTES} bytes)"
+            echo "SHA-256: ${APK_SHA256}"
+            echo "GitHub Release Page: ${RELEASE_URL}"
+            echo "Direct Latest APK URL: ${DIRECT_URL}"
+
+            {
+              echo "## Debug APK Build & Release Summary"
+              echo ""
+              echo "- **Release Tag:** \`${RELEASE_TAG}\`"
+              echo "- **APK Size:** ${APK_SIZE_HUMAN} (${APK_SIZE_BYTES} bytes)"
+              echo "- **SHA-256:** \`${APK_SHA256}\`"
+              echo "- **GitHub Release Page:** ${RELEASE_URL}"
+              echo "- **Direct Latest APK Download URL:** ${DIRECT_URL}"
+              echo ""
+              echo "Backup download: the \`app-debug-apk\` Actions artifact is also attached to this workflow run."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::GitHub Release publishing failed. The verified APK was still built and uploaded as the 'app-debug-apk' Actions artifact."
+            {
+              echo "## Debug APK Build Summary (Release Warning)"
+              echo ""
+              echo "- **APK Build & Verification:** Succeeded (${APK_SIZE_HUMAN}, SHA-256: \`${APK_SHA256}\`)."
+              echo "- **GitHub Release Publishing:** Failed."
+              echo "- **Backup Download:** Download the \`app-debug-apk\` artifact from this workflow run."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

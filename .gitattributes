@@ -1,0 +1,10 @@
+*.apk binary
+*.aab binary
+*.png binary
+*.webp binary
+*.jpg binary
+*.jpeg binary
+*.ttf binary
+*.otf binary
+*.keystore binary
+*.jks binary
