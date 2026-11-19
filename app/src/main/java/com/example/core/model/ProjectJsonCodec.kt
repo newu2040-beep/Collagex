@@ -83,6 +83,13 @@ object ProjectJsonCodec {
                             put("saturation", l.adjustments.saturation.toDouble())
                             put("warmth", l.adjustments.warmth.toDouble())
                             put("exposure", l.adjustments.exposure.toDouble())
+                            put("sharpen", l.adjustments.sharpen.toDouble())
+                            put("vignette", l.adjustments.vignette.toDouble())
+                            put("fade", l.adjustments.fade.toDouble())
+                            put("tint", l.adjustments.tint.toDouble())
+                            put("highlights", l.adjustments.highlights.toDouble())
+                            put("shadows", l.adjustments.shadows.toDouble())
+                            put("vibrance", l.adjustments.vibrance.toDouble())
                             put("filter", l.adjustments.filter.name)
                         },
                     )
@@ -187,6 +194,13 @@ object ProjectJsonCodec {
                         saturation = adjObj.optDouble("saturation", 1.0).toFloat(),
                         warmth = adjObj.optDouble("warmth", 0.0).toFloat(),
                         exposure = adjObj.optDouble("exposure", 0.0).toFloat(),
+                        sharpen = adjObj.optDouble("sharpen", 0.0).toFloat(),
+                        vignette = adjObj.optDouble("vignette", 0.0).toFloat(),
+                        fade = adjObj.optDouble("fade", 0.0).toFloat(),
+                        tint = adjObj.optDouble("tint", 0.0).toFloat(),
+                        highlights = adjObj.optDouble("highlights", 0.0).toFloat(),
+                        shadows = adjObj.optDouble("shadows", 0.0).toFloat(),
+                        vibrance = adjObj.optDouble("vibrance", 0.0).toFloat(),
                         filter = PhotoFilter.fromRaw(adjObj.optString("filter", "ORIGINAL")),
                     )
                 } else {

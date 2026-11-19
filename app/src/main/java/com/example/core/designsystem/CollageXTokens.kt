@@ -1,6 +1,8 @@
 package com.example.core.designsystem
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -10,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.core.model.ThemePalette
+import com.example.ui.theme.LocalCxUiFont
 
 /**
  * Strict Design Tokens for CollageX.
@@ -40,72 +43,174 @@ object CxSizing {
     val ChipIconSize = 20.dp
 }
 
-/** Single UI font family (Plus Jakarta Sans) with max 3 weights (400, 500, 700). */
+/** Bundled Plus Jakarta Sans default UI font family. */
 val CxUiFontFamily = FontFamily(
     Font(R.font.plus_jakarta_sans, FontWeight.Normal),
     Font(R.font.plus_jakarta_sans, FontWeight.Medium),
     Font(R.font.plus_jakarta_sans, FontWeight.Bold),
 )
 
-/** Curated open-licensed fonts for Collage Text Layers on canvas. */
+data class FontChoice(
+    val id: String,
+    val label: String,
+    val category: String,
+    val family: FontFamily,
+)
+
+/**
+ * Full inbuilt Google Fonts + Android System Font Families for both Canvas Text Layers & App UI Font selection.
+ */
 object CanvasFonts {
     val Sans = CxUiFontFamily
-    val Serif = FontFamily(Font(R.font.playfair_display, FontWeight.Normal))
-    val Script = FontFamily(Font(R.font.pacifico, FontWeight.Normal))
+    val Poppins = FontFamily(
+        Font(R.font.poppins, FontWeight.Normal),
+        Font(R.font.poppins, FontWeight.Medium),
+        Font(R.font.poppins, FontWeight.Bold),
+    )
+    val Montserrat = FontFamily(
+        Font(R.font.montserrat, FontWeight.Normal),
+        Font(R.font.montserrat, FontWeight.Medium),
+        Font(R.font.montserrat, FontWeight.Bold),
+    )
     val Geometric = FontFamily(Font(R.font.space_grotesk, FontWeight.Normal))
+    val Serif = FontFamily(Font(R.font.playfair_display, FontWeight.Normal))
+    val Lora = FontFamily(Font(R.font.lora, FontWeight.Normal))
+    val Script = FontFamily(Font(R.font.pacifico, FontWeight.Normal))
+    val DancingScript = FontFamily(Font(R.font.dancing_script, FontWeight.Normal))
+    val Display = FontFamily(Font(R.font.bebas_neue, FontWeight.Normal))
+    val Mono = FontFamily(Font(R.font.jetbrains_mono, FontWeight.Normal))
+
+    // Android System Font Set
+    val SystemDefault = FontFamily.Default
+    val SystemSans = FontFamily.SansSerif
+    val SystemSerif = FontFamily.Serif
+    val SystemMonospace = FontFamily.Monospace
+    val SystemCursive = FontFamily.Cursive
+
+    val AllCanvasFonts: List<FontChoice> = listOf(
+        FontChoice("SANS", "Jakarta", "Inbuilt", Sans),
+        FontChoice("POPPINS", "Poppins", "Inbuilt", Poppins),
+        FontChoice("MONTSERRAT", "Montserrat", "Inbuilt", Montserrat),
+        FontChoice("SERIF", "Playfair", "Inbuilt", Serif),
+        FontChoice("LORA", "Lora", "Inbuilt", Lora),
+        FontChoice("SCRIPT", "Pacifico", "Inbuilt", Script),
+        FontChoice("DANCING", "Dancing", "Inbuilt", DancingScript),
+        FontChoice("GEOMETRIC", "Grotesk", "Inbuilt", Geometric),
+        FontChoice("DISPLAY", "Bebas Neue", "Inbuilt", Display),
+        FontChoice("MONO", "JetBrains", "Inbuilt", Mono),
+        FontChoice("SYS_SANS", "System Sans", "System", SystemSans),
+        FontChoice("SYS_SERIF", "System Serif", "System", SystemSerif),
+        FontChoice("SYS_MONO", "System Mono", "System", SystemMonospace),
+        FontChoice("SYS_CURSIVE", "System Cursive", "System", SystemCursive),
+    )
+
+    val AppUiFontChoices: List<FontChoice> = listOf(
+        FontChoice("PLUS_JAKARTA", "Plus Jakarta Sans", "Inbuilt", Sans),
+        FontChoice("POPPINS", "Poppins", "Inbuilt", Poppins),
+        FontChoice("MONTSERRAT", "Montserrat", "Inbuilt", Montserrat),
+        FontChoice("LORA", "Lora Serif", "Inbuilt", Lora),
+        FontChoice("GEOMETRIC", "Space Grotesk", "Inbuilt", Geometric),
+        FontChoice("MONO", "JetBrains Mono", "Inbuilt", Mono),
+        FontChoice("SYS_DEFAULT", "System Default", "System", SystemDefault),
+        FontChoice("SYS_SANS", "System Sans", "System", SystemSans),
+        FontChoice("SYS_SERIF", "System Serif", "System", SystemSerif),
+        FontChoice("SYS_MONO", "System Monospace", "System", SystemMonospace),
+    )
 
     fun byId(id: String): FontFamily = when (id) {
+        "PLUS_JAKARTA", "SANS" -> Sans
+        "POPPINS" -> Poppins
+        "MONTSERRAT" -> Montserrat
         "SERIF" -> Serif
+        "LORA" -> Lora
         "SCRIPT" -> Script
+        "DANCING" -> DancingScript
         "GEOMETRIC" -> Geometric
+        "DISPLAY" -> Display
+        "MONO" -> Mono
+        "SYS_DEFAULT" -> SystemDefault
+        "SYS_SANS" -> SystemSans
+        "SYS_SERIF" -> SystemSerif
+        "SYS_MONO" -> SystemMonospace
+        "SYS_CURSIVE" -> SystemCursive
         else -> Sans
     }
+
+    fun uiFontLabel(id: String): String =
+        AppUiFontChoices.firstOrNull { it.id == id }?.label ?: "Plus Jakarta Sans"
 }
 
-/** Strict Type Scale (Title 22/28, Heading 18/24, Body 15/22, Input 16/22, Caption 12/16). */
+/** Strict Type Scale (Title 22/28, Heading 18/24, Body 15/22, Input 16/22, Caption 12/16) respecting user's chosen UI font. */
 object CxType {
-    val Title = TextStyle(
-        fontFamily = CxUiFontFamily,
-        fontWeight = FontWeight.Bold,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-    )
-    val Heading = TextStyle(
-        fontFamily = CxUiFontFamily,
-        fontWeight = FontWeight.Medium,
-        fontSize = 18.sp,
-        lineHeight = 24.sp,
-    )
-    val Body = TextStyle(
-        fontFamily = CxUiFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 15.sp,
-        lineHeight = 22.sp,
-    )
-    val BodyMedium = TextStyle(
-        fontFamily = CxUiFontFamily,
-        fontWeight = FontWeight.Medium,
-        fontSize = 15.sp,
-        lineHeight = 22.sp,
-    )
-    val Input = TextStyle(
-        fontFamily = CxUiFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 22.sp,
-    )
-    val Caption = TextStyle(
-        fontFamily = CxUiFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-    )
-    val CaptionMedium = TextStyle(
-        fontFamily = CxUiFontFamily,
-        fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-    )
+    val Title: TextStyle
+        @Composable
+        @ReadOnlyComposable
+        get() = TextStyle(
+            fontFamily = LocalCxUiFont.current,
+            fontWeight = FontWeight.Bold,
+            fontSize = 22.sp,
+            lineHeight = 28.sp,
+        )
+
+    val Heading: TextStyle
+        @Composable
+        @ReadOnlyComposable
+        get() = TextStyle(
+            fontFamily = LocalCxUiFont.current,
+            fontWeight = FontWeight.Medium,
+            fontSize = 18.sp,
+            lineHeight = 24.sp,
+        )
+
+    val Body: TextStyle
+        @Composable
+        @ReadOnlyComposable
+        get() = TextStyle(
+            fontFamily = LocalCxUiFont.current,
+            fontWeight = FontWeight.Normal,
+            fontSize = 15.sp,
+            lineHeight = 22.sp,
+        )
+
+    val BodyMedium: TextStyle
+        @Composable
+        @ReadOnlyComposable
+        get() = TextStyle(
+            fontFamily = LocalCxUiFont.current,
+            fontWeight = FontWeight.Medium,
+            fontSize = 15.sp,
+            lineHeight = 22.sp,
+        )
+
+    val Input: TextStyle
+        @Composable
+        @ReadOnlyComposable
+        get() = TextStyle(
+            fontFamily = LocalCxUiFont.current,
+            fontWeight = FontWeight.Normal,
+            fontSize = 16.sp,
+            lineHeight = 22.sp,
+        )
+
+    val Caption: TextStyle
+        @Composable
+        @ReadOnlyComposable
+        get() = TextStyle(
+            fontFamily = LocalCxUiFont.current,
+            fontWeight = FontWeight.Normal,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+        )
+
+    val CaptionMedium: TextStyle
+        @Composable
+        @ReadOnlyComposable
+        get() = TextStyle(
+            fontFamily = LocalCxUiFont.current,
+            fontWeight = FontWeight.Medium,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+        )
 }
 
 @Immutable
@@ -138,6 +243,12 @@ fun cxColorsFor(palette: ThemePalette, dark: Boolean): CxColors {
             ThemePalette.PEACH -> Quad(Color(0xFFFB923C), Color(0xFF3D2518), Color(0xFFFB923C), Color(0xFFEA580C))
             ThemePalette.SKY_BLUE -> Quad(Color(0xFF38BDF8), Color(0xFF183042), Color(0xFF38BDF8), Color(0xFF0284C7))
             ThemePalette.NEUTRAL -> Quad(Color(0xFFCBD5E1), Color(0xFF272E3A), Color(0xFF64748B), Color(0xFF334155))
+            ThemePalette.SAKURA_ROSE -> Quad(Color(0xFFF43F5E), Color(0xFF3D1924), Color(0xFFFB7185), Color(0xFFBE123C))
+            ThemePalette.SUNSET_CORAL -> Quad(Color(0xFFFF6B57), Color(0xFF3E201C), Color(0xFFFF8F6B), Color(0xFFE11D48))
+            ThemePalette.FOREST_SAGE -> Quad(Color(0xFF4ADE80), Color(0xFF163524), Color(0xFF34D399), Color(0xFF15803D))
+            ThemePalette.OCEAN_TEAL -> Quad(Color(0xFF22D3EE), Color(0xFF14333D), Color(0xFF06B6D4), Color(0xFF0369A1))
+            ThemePalette.GOLDEN_HONEY -> Quad(Color(0xFFFBBF24), Color(0xFF3C2D12), Color(0xFFF59E0B), Color(0xFFD97706))
+            ThemePalette.MIDNIGHT_INDIGO -> Quad(Color(0xFF818CF8), Color(0xFF1E2248), Color(0xFF6366F1), Color(0xFF4338CA))
         }
         return CxColors(
             bg = Color(0xFF141016),
@@ -145,7 +256,7 @@ fun cxColorsFor(palette: ThemePalette, dark: Boolean): CxColors {
             surface2 = Color(0xFF2A212E),
             primary = primary,
             primarySoft = primarySoft,
-            onPrimary = if (palette == ThemePalette.NEUTRAL) Color(0xFF111827) else Color(0xFFFFFFFF),
+            onPrimary = if (palette == ThemePalette.NEUTRAL || palette == ThemePalette.GOLDEN_HONEY) Color(0xFF111827) else Color(0xFFFFFFFF),
             text = Color(0xFFFAF5F7),
             textMuted = Color(0xFFBBAEC2),
             border = Color(0xFF382C3E),
@@ -274,6 +385,120 @@ fun cxColorsFor(palette: ThemePalette, dark: Boolean): CxColors {
             toolBlue = Color(0xFFE2E8F0),
             toolPeach = Color(0xFFF1F5F9),
             toolLavender = Color(0xFFE2E8F0),
+        )
+        ThemePalette.SAKURA_ROSE -> CxColors(
+            bg = Color(0xFFFFF1F4),
+            surface = Color(0xFFFFFFFF),
+            surface2 = Color(0xFFFFDCE5),
+            primary = Color(0xFFBE123C),
+            primarySoft = Color(0xFFFFE4E8),
+            onPrimary = Color(0xFFFFFFFF),
+            text = Color(0xFF231117),
+            textMuted = Color(0xFF6E4B55),
+            border = Color(0xFFF9C8D5),
+            danger = Color(0xFFD92D4B),
+            success = Color(0xFF15803D),
+            heroStart = Color(0xFFFB7185),
+            heroEnd = Color(0xFFBE123C),
+            toolPink = Color(0xFFFFDFE8),
+            toolBlue = Color(0xFFE4F0FF),
+            toolPeach = Color(0xFFFFEFE0),
+            toolLavender = Color(0xFFEEE8FF),
+        )
+        ThemePalette.SUNSET_CORAL -> CxColors(
+            bg = Color(0xFFFFF5F2),
+            surface = Color(0xFFFFFFFF),
+            surface2 = Color(0xFFFFE4DC),
+            primary = Color(0xFFE11D48),
+            primarySoft = Color(0xFFFFE4E6),
+            onPrimary = Color(0xFFFFFFFF),
+            text = Color(0xFF261414),
+            textMuted = Color(0xFF6E4F4C),
+            border = Color(0xFFF7CFC6),
+            danger = Color(0xFFDC2626),
+            success = Color(0xFF15803D),
+            heroStart = Color(0xFFFF8C61),
+            heroEnd = Color(0xFFE11D48),
+            toolPink = Color(0xFFFFE4E6),
+            toolBlue = Color(0xFFE4F0FF),
+            toolPeach = Color(0xFFFFE8D6),
+            toolLavender = Color(0xFFEEE8FF),
+        )
+        ThemePalette.FOREST_SAGE -> CxColors(
+            bg = Color(0xFFF3FAF5),
+            surface = Color(0xFFFFFFFF),
+            surface2 = Color(0xFFE1F5E7),
+            primary = Color(0xFF15803D),
+            primarySoft = Color(0xFFDCFCE7),
+            onPrimary = Color(0xFFFFFFFF),
+            text = Color(0xFF122419),
+            textMuted = Color(0xFF476352),
+            border = Color(0xFFC8E9D2),
+            danger = Color(0xFFD92D4B),
+            success = Color(0xFF15803D),
+            heroStart = Color(0xFF34D399),
+            heroEnd = Color(0xFF15803D),
+            toolPink = Color(0xFFFFE5F0),
+            toolBlue = Color(0xFFE4F0FF),
+            toolPeach = Color(0xFFFFEFE0),
+            toolLavender = Color(0xFFEEE8FF),
+        )
+        ThemePalette.OCEAN_TEAL -> CxColors(
+            bg = Color(0xFFF0FAFC),
+            surface = Color(0xFFFFFFFF),
+            surface2 = Color(0xFFD9F3F8),
+            primary = Color(0xFF0E7490),
+            primarySoft = Color(0xFFCFFAFE),
+            onPrimary = Color(0xFFFFFFFF),
+            text = Color(0xFF0E2229),
+            textMuted = Color(0xFF46646E),
+            border = Color(0xFFC2E7EF),
+            danger = Color(0xFFD92D4B),
+            success = Color(0xFF15803D),
+            heroStart = Color(0xFF22D3EE),
+            heroEnd = Color(0xFF0369A1),
+            toolPink = Color(0xFFFFE5F0),
+            toolBlue = Color(0xFFDDF4FA),
+            toolPeach = Color(0xFFFFEFE0),
+            toolLavender = Color(0xFFEEE8FF),
+        )
+        ThemePalette.GOLDEN_HONEY -> CxColors(
+            bg = Color(0xFFFFFBF0),
+            surface = Color(0xFFFFFFFF),
+            surface2 = Color(0xFFFEF0C7),
+            primary = Color(0xFFB45309),
+            primarySoft = Color(0xFFFEF3C7),
+            onPrimary = Color(0xFFFFFFFF),
+            text = Color(0xFF261A0C),
+            textMuted = Color(0xFF6B5942),
+            border = Color(0xFFF5DFB0),
+            danger = Color(0xFFD92D4B),
+            success = Color(0xFF15803D),
+            heroStart = Color(0xFFF59E0B),
+            heroEnd = Color(0xFFB45309),
+            toolPink = Color(0xFFFFE5F0),
+            toolBlue = Color(0xFFE4F0FF),
+            toolPeach = Color(0xFFFEF3C7),
+            toolLavender = Color(0xFFEEE8FF),
+        )
+        ThemePalette.MIDNIGHT_INDIGO -> CxColors(
+            bg = Color(0xFFF4F5FF),
+            surface = Color(0xFFFFFFFF),
+            surface2 = Color(0xFFE5E8FF),
+            primary = Color(0xFF4338CA),
+            primarySoft = Color(0xFFE0E7FF),
+            onPrimary = Color(0xFFFFFFFF),
+            text = Color(0xFF151733),
+            textMuted = Color(0xFF52567A),
+            border = Color(0xFFD4D9FA),
+            danger = Color(0xFFD92D4B),
+            success = Color(0xFF15803D),
+            heroStart = Color(0xFF6366F1),
+            heroEnd = Color(0xFF3730A3),
+            toolPink = Color(0xFFFFE5F0),
+            toolBlue = Color(0xFFE0E7FF),
+            toolPeach = Color(0xFFFFEFE0),
+            toolLavender = Color(0xFFEDE9FE),
         )
     }
 }

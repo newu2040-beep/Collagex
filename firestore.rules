@@ -101,8 +101,8 @@ service cloud.firestore {
       return data.userId is string && data.userId == userId &&
              data.projectId is string && data.projectId.size() >= 1 && data.projectId.size() <= 128 &&
              data.projectTitle is string && data.projectTitle.size() >= 1 && data.projectTitle.size() <= 120 &&
-             data.format is string && data.format.size() <= 12 &&
-             data.format in ['JPEG', 'PNG', 'WEBP', 'TIFF', 'PDF'] &&
+             data.format is string && data.format.size() <= 16 &&
+             data.format in ['JPEG', 'PNG', 'HEIC', 'WEBP', 'WEBP_LOSSLESS', 'BMP', 'TIFF', 'PDF'] &&
              data.widthPx is int && data.widthPx >= 1 && data.widthPx <= 20000 &&
              data.heightPx is int && data.heightPx >= 1 && data.heightPx <= 20000 &&
              data.dpi is int && data.dpi >= 36 && data.dpi <= 1200 &&
@@ -117,7 +117,7 @@ service cloud.firestore {
     function isValidUserPreferences(data, userId) {
       return data.userId is string && data.userId == userId &&
              data.themePalette is string && data.themePalette.size() <= 24 &&
-             data.themePalette in ['PASTEL_PINK', 'LAVENDER', 'MINT', 'PEACH', 'SKY_BLUE', 'NEUTRAL'] &&
+             data.themePalette in ['PASTEL_PINK', 'LAVENDER', 'MINT', 'PEACH', 'SKY_BLUE', 'NEUTRAL', 'SAKURA_ROSE', 'SUNSET_CORAL', 'FOREST_SAGE', 'OCEAN_TEAL', 'GOLDEN_HONEY', 'MIDNIGHT_INDIGO'] &&
              data.darkMode is string && data.darkMode.size() <= 12 &&
              data.darkMode in ['SYSTEM', 'LIGHT', 'DARK'] &&
              data.languageCode is string && data.languageCode.size() >= 2 && data.languageCode.size() <= 10 &&

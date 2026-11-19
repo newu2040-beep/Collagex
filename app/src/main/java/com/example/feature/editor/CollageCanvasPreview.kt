@@ -14,7 +14,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,6 +62,9 @@ import com.example.engine.BitmapProxyCache
 import com.example.engine.LayoutEngine
 import com.example.engine.PhotoColorMatrixBuilder
 import com.example.ui.theme.CollageXThemeTokens
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -234,6 +241,7 @@ fun CollageCanvasPreview(
                     proxyMaxEdgePx = if (cells.size > 20) min(proxyMaxEdgePx, 256) else proxyMaxEdgePx,
                     contentScale = if (layer.fitMode == PhotoFitMode.COVER) ContentScale.Crop else ContentScale.Fit,
                     colorFilter = ColorFilter.colorMatrix(colorMatrix),
+                    sharpenAmount = layer.adjustments.sharpen,
                     modifier = Modifier
                         .fillMaxSize()
                         .alpha(layer.opacity.coerceIn(0.1f, 1f))
@@ -245,6 +253,41 @@ fun CollageCanvasPreview(
                             translationY = layer.panY * size.height
                         },
                 )
+                // Real radial vignette overlay
+                if (layer.adjustments.vignette > 0.02f) {
+                    val vigAlpha = (layer.adjustments.vignette * 0.78f).coerceIn(0f, 0.85f)
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val radius = max(size.width, size.height) * 0.76f
+                        drawRect(
+                            brush = Brush.radialGradient(
+                                colorStops = arrayOf(
+                                    0.38f to Color.Transparent,
+                                    1.0f to Color.Black.copy(alpha = vigAlpha),
+                                ),
+                                center = Offset(size.width / 2f, size.height / 2f),
+                                radius = radius.coerceAtLeast(1f),
+                            ),
+                        )
+                    }
+                }
+                if (interactive && layer.locked) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(CxSpace.S4)
+                            .size(22.dp)
+                            .clip(CircleShape)
+                            .background(colors.success.copy(alpha = 0.9f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Lock,
+                            contentDescription = "Protected from delete",
+                            tint = Color.White,
+                            modifier = Modifier.size(13.dp),
+                        )
+                    }
+                }
             }
         }
 
@@ -334,6 +377,23 @@ fun CollageCanvasPreview(
                     }
                     LayerType.PHOTO -> Unit
                 }
+                if (interactive && layer.locked) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(18.dp)
+                            .clip(CircleShape)
+                            .background(colors.success.copy(alpha = 0.92f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Lock,
+                            contentDescription = "Protected from delete",
+                            tint = Color.White,
+                            modifier = Modifier.size(11.dp),
+                        )
+                    }
+                }
             }
         }
 
@@ -366,14 +426,23 @@ private fun ProxyPhotoImage(
     proxyMaxEdgePx: Int,
     contentScale: ContentScale,
     colorFilter: ColorFilter?,
+    sharpenAmount: Float = 0f,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    var bitmap by remember(uriString, proxyMaxEdgePx) { mutableStateOf<Bitmap?>(null) }
+    val quantizedSharpen = (sharpenAmount * 10f).roundToInt() / 10f
+    var bitmap by remember(uriString, proxyMaxEdgePx, quantizedSharpen) { mutableStateOf<Bitmap?>(null) }
 
-    LaunchedEffect(uriString, proxyMaxEdgePx) {
+    LaunchedEffect(uriString, proxyMaxEdgePx, quantizedSharpen) {
         if (!uriString.isNullOrBlank()) {
-            bitmap = BitmapProxyCache.loadProxy(context, uriString, proxyMaxEdgePx)
+            val base = BitmapProxyCache.loadProxy(context, uriString, proxyMaxEdgePx)
+            bitmap = if (base != null && quantizedSharpen > 0.02f) {
+                withContext(Dispatchers.Default) {
+                    BitmapProxyCache.applySharpen(base, quantizedSharpen)
+                }
+            } else {
+                base
+            }
         } else {
             bitmap = null
         }

@@ -1,7 +1,13 @@
 package com.example.feature.export
 
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -33,7 +39,6 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.SaveAlt
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Icon
@@ -44,6 +49,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -54,9 +60,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.example.R
 import com.example.core.designsystem.CxCard
 import com.example.core.designsystem.CxChip
@@ -79,22 +86,28 @@ import com.example.ui.theme.CollageXThemeTokens
 import java.util.Locale
 import kotlin.math.roundToInt
 
+private const val EXPORT_NOTIFICATION_CHANNEL_ID = "collagex_exports"
+
 /**
  * Full-featured Export Screen supporting JPEG, PNG, WebP, strip-streamed TIFF, and PDF,
  * 1080p / 2K / 4K / 8K Tiled / Canvas Size output, transparent alpha toggle, EXIF stripping,
- * MediaStore saving + SAF "Save As…", progress cancellation, and Open/Share actions.
+ * MediaStore saving + SAF "Save As…", Direct Share after export, and completion push notifications.
  */
 @Composable
 fun ExportScreen(
     project: CollageProject,
     defaultStripExif: Boolean,
+    notificationsEnabled: Boolean,
+    autoShareDefault: Boolean,
     exportState: ExportUiState,
     onBack: () -> Unit,
+    onUpdateAutoShare: (Boolean) -> Unit,
     onStartExport: (ExportJobConfig, Uri?) -> Unit,
     onCancelExport: () -> Unit,
     onResetExportState: () -> Unit,
 ) {
     val colors = CollageXThemeTokens.colors
+    val strings = CollageXThemeTokens.strings
     val context = LocalContext.current
 
     var format by remember { mutableStateOf(ExportFormat.PNG) }
@@ -102,6 +115,9 @@ fun ExportScreen(
     var quality by remember { mutableFloatStateOf(92f) }
     var transparentBg by remember { mutableStateOf(false) }
     var stripExif by remember(defaultStripExif) { mutableStateOf(defaultStripExif) }
+    var autoShare by remember(autoShareDefault) { mutableStateOf(autoShareDefault) }
+    var pendingDirectShare by remember { mutableStateOf(false) }
+    var lastHandledUri by remember { mutableStateOf<String?>(null) }
 
     val activeConfig = remember(format, resolutionPreset, quality, transparentBg, stripExif) {
         ExportJobConfig(
@@ -121,8 +137,11 @@ fun ExportScreen(
         val rawMb = targetDims.rawRgbaBytes / (1024.0 * 1024.0)
         val factor = when (format) {
             ExportFormat.JPEG -> 0.08 + (quality / 100.0) * 0.14
+            ExportFormat.HEIC -> 0.04 + (quality / 100.0) * 0.08
             ExportFormat.WEBP -> 0.06 + (quality / 100.0) * 0.12
+            ExportFormat.WEBP_LOSSLESS -> 0.30
             ExportFormat.PNG -> 0.42
+            ExportFormat.BMP -> 0.76
             ExportFormat.TIFF -> 0.78
             ExportFormat.PDF -> 0.28
         }
@@ -140,6 +159,39 @@ fun ExportScreen(
         }
     }
 
+    fun launchDirectShare(uriString: String, mimeType: String, displayName: String) {
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = mimeType
+            putExtra(Intent.EXTRA_STREAM, Uri.parse(uriString))
+            putExtra(Intent.EXTRA_SUBJECT, displayName)
+            putExtra(Intent.EXTRA_TEXT, "Created with CollageX")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching {
+            context.startActivity(Intent.createChooser(shareIntent, strings.exportDirectShare))
+        }
+    }
+
+    // Post real Android export notification & trigger Direct Share when requested
+    LaunchedEffect(exportState) {
+        val success = exportState as? ExportUiState.Success ?: return@LaunchedEffect
+        val out = success.output
+        if (lastHandledUri == out.uriString) return@LaunchedEffect
+        lastHandledUri = out.uriString
+
+        if (notificationsEnabled) {
+            postExportCompleteNotification(
+                context = context,
+                fileName = out.displayName,
+                dimensions = "${out.widthPx}×${out.heightPx}px · ${formatFileBytes(out.fileSizeBytes)}",
+            )
+        }
+        if (pendingDirectShare || autoShare) {
+            pendingDirectShare = false
+            launchDirectShare(out.uriString, out.mimeType, out.displayName)
+        }
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             if (exportState is ExportUiState.Success || exportState is ExportUiState.Error) {
@@ -154,7 +206,7 @@ fun ExportScreen(
             .background(colors.bg),
     ) {
         CxTopBar(
-            title = stringResource(R.string.export_title),
+            title = strings.exportTitle,
             onBack = {
                 if (exportState is ExportUiState.Running) {
                     onCancelExport()
@@ -277,14 +329,17 @@ fun ExportScreen(
                                             color = colors.primary,
                                         )
                                         Text(
-                                            text = "Zero watermarks · Full quality",
+                                            text = strings.zeroWatermarksFullQuality,
                                             style = CxType.Caption,
                                             color = colors.textMuted,
                                         )
                                     }
                                     CxSecondaryButton(
-                                        text = stringResource(R.string.export_cancel),
-                                        onClick = onCancelExport,
+                                        text = strings.exportCancel,
+                                        onClick = {
+                                            pendingDirectShare = false
+                                            onCancelExport()
+                                        },
                                         testTag = "export_cancel_button",
                                     )
                                 }
@@ -314,7 +369,7 @@ fun ExportScreen(
                                             verticalArrangement = Arrangement.spacedBy(CxSpace.S4),
                                         ) {
                                             Text(
-                                                text = "Export Complete",
+                                                text = strings.exportCompleteTitle,
                                                 style = CxType.Heading,
                                                 color = colors.text,
                                             )
@@ -332,7 +387,7 @@ fun ExportScreen(
                                         horizontalArrangement = Arrangement.spacedBy(CxSpace.S8),
                                     ) {
                                         CxSecondaryButton(
-                                            text = "Open",
+                                            text = strings.exportOpen,
                                             leadingIcon = Icons.Rounded.OpenInNew,
                                             onClick = {
                                                 val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -344,18 +399,11 @@ fun ExportScreen(
                                             modifier = Modifier.weight(1f),
                                             testTag = "export_open_button",
                                         )
-                                        CxSecondaryButton(
-                                            text = "Share",
+                                        CxPrimaryButton(
+                                            text = strings.exportDirectShare,
                                             leadingIcon = Icons.Rounded.Share,
                                             onClick = {
-                                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                                    type = out.mimeType
-                                                    putExtra(Intent.EXTRA_STREAM, Uri.parse(out.uriString))
-                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                }
-                                                runCatching {
-                                                    context.startActivity(Intent.createChooser(intent, "Share Collage"))
-                                                }
+                                                launchDirectShare(out.uriString, out.mimeType, out.displayName)
                                             },
                                             modifier = Modifier.weight(1f),
                                             testTag = "export_share_button",
@@ -377,7 +425,7 @@ fun ExportScreen(
                 item {
                     CxCard {
                         Text(
-                            text = stringResource(R.string.export_format),
+                            text = strings.exportFormat,
                             style = CxType.Heading,
                             color = colors.text,
                         )
@@ -392,13 +440,7 @@ fun ExportScreen(
                             }
                         }
                         Text(
-                            text = when (format) {
-                                ExportFormat.PNG -> "Lossless PNG with optional transparent background."
-                                ExportFormat.JPEG -> "Compact photographic JPEG with adjustable compression quality."
-                                ExportFormat.WEBP -> "Modern high-efficiency WebP supporting alpha and quality control."
-                                ExportFormat.TIFF -> "Archival print TIFF written with memory-safe strip streaming."
-                                ExportFormat.PDF -> "Print-ready vector-framed PDF sized accurately to canvas DPI."
-                            },
+                            text = strings.formatDescription(format),
                             style = CxType.Caption,
                             color = colors.textMuted,
                         )
@@ -409,21 +451,21 @@ fun ExportScreen(
                 item {
                     CxCard {
                         Text(
-                            text = stringResource(R.string.export_resolution),
+                            text = strings.exportResolution,
                             style = CxType.Heading,
                             color = colors.text,
                         )
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(CxSpace.S8)) {
                             items(ExportResolutionPreset.entries) { preset ->
                                 CxChip(
-                                    label = preset.label,
+                                    label = strings.resolutionPresetLabel(preset),
                                     selected = resolutionPreset == preset,
                                     onClick = { resolutionPreset = preset },
                                     testTag = "export_res_${preset.name}",
                                 )
                             }
                         }
-                        if (resolutionPreset == ExportResolutionPreset.UHD_8K) {
+                        if (resolutionPreset == ExportResolutionPreset.UHD_8K || resolutionPreset == ExportResolutionPreset.UHD_6K) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(CxSpace.S8),
@@ -435,7 +477,7 @@ fun ExportScreen(
                                     modifier = Modifier.size(18.dp),
                                 )
                                 Text(
-                                    text = "Ultra-high 8K output uses memory-safe rendering. TIFF streams strip-by-strip.",
+                                    text = strings.export8kNote,
                                     style = CxType.Caption,
                                     color = colors.textMuted,
                                 )
@@ -444,11 +486,11 @@ fun ExportScreen(
                     }
                 }
 
-                // 5. Quality, Transparency & Privacy Options
+                // 5. Quality, Transparency, Direct Share & Privacy Options
                 item {
                     CxCard {
                         Text(
-                            text = "Quality & Privacy",
+                            text = strings.qualitySharePrivacy,
                             style = CxType.Heading,
                             color = colors.text,
                         )
@@ -460,7 +502,7 @@ fun ExportScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                 ) {
                                     Text(
-                                        text = stringResource(R.string.export_quality),
+                                        text = strings.exportQuality,
                                         style = CxType.BodyMedium,
                                         color = colors.text,
                                     )
@@ -484,11 +526,22 @@ fun ExportScreen(
                         }
 
                         CxSwitchRow(
-                            title = stringResource(R.string.export_transparent_bg),
+                            title = strings.exportAutoShare,
+                            subtitle = strings.exportAutoShareSub,
+                            checked = autoShare,
+                            onCheckedChange = { enabled ->
+                                autoShare = enabled
+                                onUpdateAutoShare(enabled)
+                            },
+                            testTag = "export_auto_share_switch",
+                        )
+
+                        CxSwitchRow(
+                            title = strings.exportTransparentBg,
                             subtitle = if (format.supportsAlpha) {
-                                "Export without solid canvas backdrop"
+                                strings.exportTransparentSub
                             } else {
-                                "${format.label} does not support transparency"
+                                strings.exportNoAlphaNote
                             },
                             checked = transparentBg && format.supportsAlpha,
                             onCheckedChange = { enabled ->
@@ -514,7 +567,7 @@ fun ExportScreen(
                                     modifier = Modifier.size(18.dp),
                                 )
                                 Text(
-                                    text = "${format.label} cannot preserve alpha transparency. Switch to PNG, WebP, or TIFF for a transparent background.",
+                                    text = strings.exportNoAlphaNote,
                                     style = CxType.Caption,
                                     color = colors.text,
                                 )
@@ -522,8 +575,8 @@ fun ExportScreen(
                         }
 
                         CxSwitchRow(
-                            title = stringResource(R.string.export_strip_exif),
-                            subtitle = "Remove GPS location and camera metadata from exported files",
+                            title = strings.exportStripExif,
+                            subtitle = strings.exportStripExifSub,
                             checked = stripExif,
                             onCheckedChange = { stripExif = it },
                             testTag = "export_strip_exif_switch",
@@ -533,7 +586,7 @@ fun ExportScreen(
             }
         }
 
-        // Bottom Sticky Action Bar (1 Primary + 1 Secondary)
+        // Bottom Sticky Action Bar (1 Primary Save + Save & Direct Share / Save As)
         Surface(
             color = colors.surface,
             shadowElevation = 6.dp,
@@ -548,28 +601,84 @@ fun ExportScreen(
             ) {
                 val isRunning = exportState is ExportUiState.Running
                 CxPrimaryButton(
-                    text = if (isRunning) "Exporting…" else stringResource(R.string.export_save_gallery),
+                    text = if (isRunning) strings.exportingLabel else strings.exportSaveGallery,
                     leadingIcon = Icons.Rounded.Download,
                     loading = isRunning,
                     enabled = !isRunning,
-                    onClick = { onStartExport(activeConfig, null) },
+                    onClick = {
+                        pendingDirectShare = false
+                        onStartExport(activeConfig, null)
+                    },
                     testTag = "export_save_gallery_button",
                 )
-                CxSecondaryButton(
-                    text = stringResource(R.string.export_save_as),
-                    leadingIcon = Icons.Rounded.FolderOpen,
-                    enabled = !isRunning,
-                    onClick = {
-                        val safeName = project.title
-                            .replace(Regex("[^a-zA-Z0-9_\\-]"), "_")
-                            .ifBlank { "CollageX" }
-                            .take(40)
-                        createDocLauncher.launch("${safeName}_${targetDims.widthPx}x${targetDims.heightPx}.${format.extension}")
-                    },
-                    testTag = "export_save_as_button",
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(CxSpace.S8),
+                ) {
+                    CxSecondaryButton(
+                        text = strings.exportSaveAndShare,
+                        leadingIcon = Icons.Rounded.Share,
+                        enabled = !isRunning,
+                        onClick = {
+                            pendingDirectShare = true
+                            onStartExport(activeConfig, null)
+                        },
+                        modifier = Modifier.weight(1f),
+                        testTag = "export_save_and_share_button",
+                    )
+                    CxSecondaryButton(
+                        text = strings.exportSaveAs,
+                        leadingIcon = Icons.Rounded.FolderOpen,
+                        enabled = !isRunning,
+                        onClick = {
+                            pendingDirectShare = false
+                            val safeName = project.title
+                                .replace(Regex("[^a-zA-Z0-9_\\-]"), "_")
+                                .ifBlank { "CollageX" }
+                                .take(40)
+                            createDocLauncher.launch("${safeName}_${targetDims.widthPx}x${targetDims.heightPx}.${format.extension}")
+                        },
+                        modifier = Modifier.weight(1f),
+                        testTag = "export_save_as_button",
+                    )
+                }
             }
         }
+    }
+}
+
+private fun postExportCompleteNotification(
+    context: Context,
+    fileName: String,
+    dimensions: String,
+) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) return
+    }
+    runCatching {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                EXPORT_NOTIFICATION_CHANNEL_ID,
+                "CollageX Exports",
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = "Alerts when high-resolution collages finish exporting"
+            }
+            manager.createNotificationChannel(channel)
+        }
+        val notification = NotificationCompat.Builder(context, EXPORT_NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("Collage Exported")
+            .setContentText("$fileName ($dimensions)")
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        manager.notify(fileName.hashCode(), notification)
     }
 }
 

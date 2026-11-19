@@ -25,6 +25,8 @@ import com.example.core.model.TextStyleSpec
 import com.example.core.model.UiState
 import com.example.core.model.UserPreferences
 import com.example.data.repository.CollageRepository
+import com.example.engine.AutoFitEngine
+import com.example.engine.AutoFitPreset
 import com.example.engine.CollageExportEngine
 import com.example.engine.ExportOutputResult
 import com.google.firebase.firestore.FirebaseFirestoreException
@@ -54,6 +56,8 @@ data class EditorUiState(
     val selectedLayerId: String? = null,
     val swapSourceLayerId: String? = null,
     val showGuides: Boolean = false,
+    val autoFitEnabled: Boolean = true,
+    val autoFitPreset: AutoFitPreset = AutoFitPreset.BALANCED,
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
     val saveStatus: String = "Saved",
@@ -187,6 +191,8 @@ class CollageXViewModel(
         layoutType: LayoutType = LayoutType.BENTO,
         canvasSpec: CanvasSpec? = null,
         useSamplePack: Boolean = false,
+        autoFitPreset: AutoFitPreset? = AutoFitPreset.BALANCED,
+        preserveRequestedLayout: Boolean = false,
         onCreated: (CollageProject) -> Unit,
     ) {
         val prefs = preferences.value
@@ -196,7 +202,7 @@ class CollageXViewModel(
             unit = prefs.defaultUnit,
             dpi = prefs.defaultDpi,
         )
-        val project = repository.createNewProject(
+        val rawProject = repository.createNewProject(
             ownerUid = currentUserId,
             title = title,
             photoUris = uris.map { it.toString() },
@@ -204,20 +210,40 @@ class CollageXViewModel(
             canvasSpec = spec,
             useSamplePackIfEmpty = useSamplePack,
         )
-        openProjectInEditor(project)
+        val project = if (autoFitPreset != null) {
+            AutoFitEngine.applyToProject(
+                project = rawProject,
+                preset = autoFitPreset,
+                targetCanvas = spec,
+                preserveLayout = preserveRequestedLayout,
+            )
+        } else {
+            rawProject
+        }
+        openProjectInEditor(
+            project = project,
+            autoFitEnabled = autoFitPreset != null,
+            autoFitPreset = autoFitPreset ?: AutoFitPreset.BALANCED,
+        )
         viewModelScope.launch {
             repository.saveProject(project, autoSyncCloud = prefs.cloudAutoSync)
         }
         onCreated(project)
     }
 
-    fun openProjectInEditor(project: CollageProject) {
+    fun openProjectInEditor(
+        project: CollageProject,
+        autoFitEnabled: Boolean = true,
+        autoFitPreset: AutoFitPreset = AutoFitPreset.BALANCED,
+    ) {
         undoStack.clear()
         redoStack.clear()
         _editorState.value = EditorUiState(
             project = project,
             selectedLayerId = project.layers.firstOrNull()?.id,
             swapSourceLayerId = null,
+            autoFitEnabled = autoFitEnabled,
+            autoFitPreset = autoFitPreset,
             canUndo = false,
             canRedo = false,
             saveStatus = "Saved",
@@ -363,6 +389,8 @@ class CollageXViewModel(
 
     fun addPhotosToProject(uris: List<Uri>) {
         if (uris.isEmpty()) return
+        val autoFit = _editorState.value.autoFitEnabled
+        val preset = _editorState.value.autoFitPreset
         commitProjectEdit { proj ->
             val maxZ = proj.layers.maxOfOrNull { it.zIndex } ?: -1
             val added = uris.mapIndexed { idx, uri ->
@@ -374,13 +402,23 @@ class CollageXViewModel(
                     label = "Photo ${proj.photoCount + idx + 1}",
                 )
             }
-            proj.copy(layers = proj.layers + added)
+            val updated = proj.copy(layers = proj.layers + added)
+            if (autoFit) {
+                AutoFitEngine.applyToProject(updated, preset)
+            } else {
+                updated
+            }
         }
-        showToast("Added ${uris.size} photo${if (uris.size == 1) "" else "s"}")
+        showToast(
+            if (autoFit) "Added ${uris.size} photo${if (uris.size == 1) "" else "s"} · Auto-fitted"
+            else "Added ${uris.size} photo${if (uris.size == 1) "" else "s"}",
+        )
     }
 
     fun addSamplePhotos(count: Int) {
         val safeCount = count.coerceIn(1, 50)
+        val autoFit = _editorState.value.autoFitEnabled
+        val preset = _editorState.value.autoFitPreset
         commitProjectEdit { proj ->
             val maxZ = proj.layers.maxOfOrNull { it.zIndex } ?: -1
             val added = List(safeCount) { idx ->
@@ -393,9 +431,41 @@ class CollageXViewModel(
                     label = "${SampleArtwork.labelFor(key)} ${proj.photoCount + idx + 1}",
                 )
             }
-            proj.copy(layers = proj.layers + added)
+            val updated = proj.copy(layers = proj.layers + added)
+            if (autoFit) {
+                AutoFitEngine.applyToProject(updated, preset)
+            } else {
+                updated
+            }
         }
-        showToast("Added $safeCount sample photo${if (safeCount == 1) "" else "s"}")
+        showToast(
+            if (autoFit) "Added $safeCount sample photo${if (safeCount == 1) "" else "s"} · Auto-fitted"
+            else "Added $safeCount sample photo${if (safeCount == 1) "" else "s"}",
+        )
+    }
+
+    fun setAutoFitEnabled(enabled: Boolean) {
+        _editorState.update { it.copy(autoFitEnabled = enabled) }
+        showToast(
+            if (enabled) "Auto-Fit ON (new photos & resizes auto-organize)"
+            else "Manual mode (spacing, borders & layout stay as you set)",
+        )
+    }
+
+    fun applyAutoFit(preset: AutoFitPreset, targetCanvas: CanvasSpec? = null) {
+        _editorState.update { it.copy(autoFitPreset = preset) }
+        commitProjectEdit { proj ->
+            AutoFitEngine.applyToProject(
+                project = proj,
+                preset = preset,
+                targetCanvas = targetCanvas,
+            )
+        }
+        val proj = _editorState.value.project
+        if (proj != null) {
+            val dims = CanvasMath.toPixelDimensions(proj.canvas)
+            showToast("Auto-Fit (${preset.label}) applied · ${dims.widthPx}×${dims.heightPx}px")
+        }
     }
 
     fun replaceSelectedPhoto(uri: Uri) {
@@ -417,9 +487,20 @@ class CollageXViewModel(
     }
 
     fun toggleLayerLock(layerId: String) {
+        val target = _editorState.value.project?.layers?.firstOrNull { it.id == layerId } ?: return
+        val nextLocked = !target.locked
         commitProjectEdit { proj ->
-            proj.copy(layers = proj.layers.map { if (it.id == layerId) it.copy(locked = !it.locked) else it })
+            proj.copy(layers = proj.layers.map { if (it.id == layerId) it.copy(locked = nextLocked) else it })
         }
+        val kindName = when (target.type) {
+            LayerType.PHOTO -> "Photo"
+            LayerType.TEXT -> "Text"
+            LayerType.STICKER -> "Sticker"
+        }
+        showToast(
+            if (nextLocked) "$kindName protected (Don't Delete)"
+            else "$kindName unlocked for editing & deleting",
+        )
     }
 
     fun toggleLayerVisibility(layerId: String) {
@@ -444,13 +525,25 @@ class CollageXViewModel(
         showToast("Layer duplicated")
     }
 
-    fun deleteLayer(layerId: String) {
+    fun deleteLayer(layerId: String, forceUnlock: Boolean = false): Boolean {
+        val target = _editorState.value.project?.layers?.firstOrNull { it.id == layerId } ?: return false
+        val kindName = when (target.type) {
+            LayerType.PHOTO -> "Photo"
+            LayerType.TEXT -> "Text"
+            LayerType.STICKER -> "Sticker"
+        }
+        if (target.locked && !forceUnlock) {
+            showToast("$kindName is protected (Don't Delete). Unlock first to remove.")
+            return false
+        }
         commitProjectEdit { proj ->
             proj.copy(layers = proj.layers.filterNot { it.id == layerId })
         }
         if (_editorState.value.selectedLayerId == layerId) {
             _editorState.update { it.copy(selectedLayerId = it.project?.layers?.firstOrNull()?.id) }
         }
+        showToast("$kindName deleted · Tap Undo to restore")
+        return true
     }
 
     fun resetSelectedLayer() {
@@ -539,23 +632,35 @@ class CollageXViewModel(
 
     /**
      * Core Differentiator: Post-creation custom canvas resize applied non-destructively
-     * to the active project with full Undo/Redo support.
+     * to the active project with optional Auto-Fit spacing/border/corner organization and Undo/Redo.
      */
-    fun applyCustomCanvasSize(newSpec: CanvasSpec) {
+    fun applyCustomCanvasSize(newSpec: CanvasSpec, autoFit: Boolean = true) {
+        val preset = _editorState.value.autoFitPreset
         commitProjectEdit { proj ->
-            val adaptedLayers = CanvasMath.adaptLayersForResize(
-                layers = proj.layers,
-                oldSpec = proj.canvas,
-                newSpec = newSpec,
-                mode = newSpec.resizeMode,
-            )
-            proj.copy(
-                canvas = newSpec,
-                layers = adaptedLayers,
-            )
+            if (autoFit) {
+                AutoFitEngine.applyToProject(
+                    project = proj,
+                    preset = preset,
+                    targetCanvas = newSpec,
+                )
+            } else {
+                val adaptedLayers = CanvasMath.adaptLayersForResize(
+                    layers = proj.layers,
+                    oldSpec = proj.canvas,
+                    newSpec = newSpec,
+                    mode = newSpec.resizeMode,
+                )
+                proj.copy(
+                    canvas = newSpec,
+                    layers = adaptedLayers,
+                )
+            }
         }
         val dims = CanvasMath.toPixelDimensions(newSpec)
-        showToast("Canvas resized to ${dims.widthPx} × ${dims.heightPx}px")
+        showToast(
+            if (autoFit) "Auto-fitted to ${dims.widthPx} × ${dims.heightPx}px"
+            else "Canvas resized to ${dims.widthPx} × ${dims.heightPx}px",
+        )
     }
 
     // --- Project Management Actions ---

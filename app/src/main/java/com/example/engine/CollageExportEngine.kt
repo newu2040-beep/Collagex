@@ -9,6 +9,7 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RadialGradient
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
@@ -19,6 +20,8 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
+import androidx.core.content.res.ResourcesCompat
+import com.example.R
 import com.example.core.designsystem.SampleArtwork
 import com.example.core.model.BackgroundType
 import com.example.core.model.CanvasMath
@@ -133,19 +136,51 @@ class CollageExportEngine(private val context: Context) {
                 mimeType = config.format.mimeType,
                 customTargetUri = customTargetUri,
             ) { outStream ->
-                val compressFormat = when (config.format) {
-                    ExportFormat.JPEG -> Bitmap.CompressFormat.JPEG
-                    ExportFormat.PNG -> Bitmap.CompressFormat.PNG
-                    ExportFormat.WEBP -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        if (config.quality >= 100) Bitmap.CompressFormat.WEBP_LOSSLESS
-                        else Bitmap.CompressFormat.WEBP_LOSSY
-                    } else {
-                        @Suppress("DEPRECATION")
-                        Bitmap.CompressFormat.WEBP
+                when (config.format) {
+                    ExportFormat.HEIC -> {
+                        HighQualityImageEncoders.writeHeic(
+                            context = context,
+                            bitmap = outputBitmap,
+                            quality = config.quality,
+                            outputStream = outStream,
+                        )
                     }
-                    else -> Bitmap.CompressFormat.PNG
+                    ExportFormat.BMP -> {
+                        HighQualityImageEncoders.writeBmp(
+                            bitmap = outputBitmap,
+                            includeAlpha = config.transparentBg,
+                            dpi = project.canvas.dpi,
+                            outputStream = outStream,
+                        )
+                    }
+                    ExportFormat.WEBP_LOSSLESS -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            outputBitmap.compress(Bitmap.CompressFormat.WEBP_LOSSLESS, 100, outStream)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            outputBitmap.compress(Bitmap.CompressFormat.WEBP, 100, outStream)
+                        }
+                    }
+                    ExportFormat.JPEG -> {
+                        outputBitmap.compress(Bitmap.CompressFormat.JPEG, config.quality.coerceIn(10, 100), outStream)
+                    }
+                    ExportFormat.PNG -> {
+                        outputBitmap.compress(Bitmap.CompressFormat.PNG, 100, outStream)
+                    }
+                    ExportFormat.WEBP -> {
+                        val fmt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            if (config.quality >= 100) Bitmap.CompressFormat.WEBP_LOSSLESS
+                            else Bitmap.CompressFormat.WEBP_LOSSY
+                        } else {
+                            @Suppress("DEPRECATION")
+                            Bitmap.CompressFormat.WEBP
+                        }
+                        outputBitmap.compress(fmt, config.quality.coerceIn(10, 100), outStream)
+                    }
+                    else -> {
+                        outputBitmap.compress(Bitmap.CompressFormat.PNG, 100, outStream)
+                    }
                 }
-                outputBitmap.compress(compressFormat, config.quality.coerceIn(10, 100), outStream)
             }
 
             onProgress(1f, "Saved $fileName")
@@ -467,8 +502,14 @@ class CollageExportEngine(private val context: Context) {
                 val targetCellEdge = max(rect.width(), rect.height()).roundToInt().coerceIn(256, 2048)
                 val bmp = BitmapProxyCache.decodeSampledBitmap(context, Uri.parse(uriStr), targetCellEdge)
                 if (bmp != null) {
-                    drawBitmapInRect(canvas, bmp, rect, cell.layer.fitMode, paint)
-                    bmp.recycle()
+                    val renderBmp = if (cell.layer.adjustments.sharpen > 0.02f) {
+                        BitmapProxyCache.applySharpen(bmp, cell.layer.adjustments.sharpen)
+                    } else {
+                        bmp
+                    }
+                    drawBitmapInRect(canvas, renderBmp, rect, cell.layer.fitMode, paint)
+                    if (renderBmp !== bmp && !renderBmp.isRecycled) renderBmp.recycle()
+                    if (!bmp.isRecycled) bmp.recycle()
                 } else {
                     SampleArtwork.drawScenicAndroid(canvas, rect, SampleArtwork.PAGODA)
                 }
@@ -476,6 +517,26 @@ class CollageExportEngine(private val context: Context) {
                 SampleArtwork.drawScenicAndroid(canvas, rect, cell.layer.sampleArtKey ?: SampleArtwork.PAGODA)
             }
             canvas.restore()
+
+            // Radial vignette overlay inside clipped cell
+            if (cell.layer.adjustments.vignette > 0.02f) {
+                canvas.save()
+                canvas.clipPath(clipPath)
+                val vigAlpha = (cell.layer.adjustments.vignette * 0.78f * 255f).roundToInt().coerceIn(0, 220)
+                val vigRadius = max(rect.width(), rect.height()) * 0.76f
+                val vigPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = RadialGradient(
+                        rect.centerX(),
+                        rect.centerY(),
+                        vigRadius.coerceAtLeast(1f),
+                        intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT, Color.argb(vigAlpha, 0, 0, 0)),
+                        floatArrayOf(0f, 0.38f, 1f),
+                        Shader.TileMode.CLAMP,
+                    )
+                }
+                canvas.drawRect(rect, vigPaint)
+                canvas.restore()
+            }
 
             // Cell border stroke if visible
             if (project.border.color != project.background.primaryColor && project.border.spacing > 0f) {
@@ -515,16 +576,12 @@ class CollageExportEngine(private val context: Context) {
     private fun drawTextLayer(canvas: Canvas, layer: CollageLayer, minDim: Float) {
         val style = layer.textStyle ?: return
         val textSizePx = (style.fontSizeSp / 360f) * minDim * 1.4f
+        val baseTypeface = resolveExportTypeface(style.fontId)
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = style.color
             textSize = textSizePx
             typeface = Typeface.create(
-                when (style.fontId) {
-                    "SERIF" -> Typeface.SERIF
-                    "SCRIPT" -> Typeface.SERIF
-                    "GEOMETRIC" -> Typeface.MONOSPACE
-                    else -> Typeface.SANS_SERIF
-                },
+                baseTypeface,
                 if (style.bold) Typeface.BOLD else Typeface.NORMAL,
             )
             textAlign = Paint.Align.CENTER
@@ -547,6 +604,35 @@ class CollageExportEngine(private val context: Context) {
         }
         val baseline = -(fm.ascent + fm.descent) / 2f
         canvas.drawText(style.text, 0f, baseline, textPaint)
+    }
+
+    private fun resolveExportTypeface(fontId: String): Typeface {
+        val fontRes = when (fontId) {
+            "PLUS_JAKARTA", "SANS" -> R.font.plus_jakarta_sans
+            "POPPINS" -> R.font.poppins
+            "MONTSERRAT" -> R.font.montserrat
+            "SERIF" -> R.font.playfair_display
+            "LORA" -> R.font.lora
+            "SCRIPT" -> R.font.pacifico
+            "DANCING" -> R.font.dancing_script
+            "GEOMETRIC" -> R.font.space_grotesk
+            "DISPLAY" -> R.font.bebas_neue
+            "MONO" -> R.font.jetbrains_mono
+            else -> null
+        }
+        if (fontRes != null) {
+            try {
+                ResourcesCompat.getFont(context, fontRes)?.let { return it }
+            } catch (_: Throwable) {
+                // Fall back to system typeface below
+            }
+        }
+        return when (fontId) {
+            "SYS_SERIF", "SERIF", "LORA" -> Typeface.SERIF
+            "SYS_MONO", "MONO" -> Typeface.MONOSPACE
+            "SYS_CURSIVE", "SCRIPT", "DANCING" -> Typeface.create("cursive", Typeface.NORMAL)
+            else -> Typeface.SANS_SERIF
+        }
     }
 
     private fun drawStickerLayer(canvas: Canvas, layer: CollageLayer, minDim: Float) {

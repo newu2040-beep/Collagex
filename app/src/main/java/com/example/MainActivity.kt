@@ -1,6 +1,9 @@
 package com.example
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -9,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -23,14 +27,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesomeMosaic
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.PhotoLibrary
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -50,17 +60,20 @@ import androidx.navigation.compose.rememberNavController
 import com.example.core.database.CollageDatabase
 import com.example.core.datastore.PreferencesDataStore
 import com.example.core.designsystem.CxBottomNav
+import com.example.core.designsystem.CxChip
 import com.example.core.designsystem.CxListItem
 import com.example.core.designsystem.CxSpace
 import com.example.core.designsystem.CxToastBanner
 import com.example.core.designsystem.CxType
 import com.example.core.designsystem.MainTab
+import com.example.core.model.CanvasMath
 import com.example.core.model.CanvasSpec
 import com.example.core.model.LayoutType
 import com.example.core.model.UserPreferences
 import com.example.data.firebase.CloudSyncRepository
 import com.example.data.firebase.authStateFlow
 import com.example.data.repository.CollageRepository
+import com.example.engine.AutoFitPreset
 import com.example.engine.CollageExportEngine
 import com.example.feature.CollageXViewModel
 import com.example.feature.canvasize.CustomSizeScreen
@@ -100,6 +113,8 @@ class MainActivity : ComponentActivity() {
             CollageXTheme(
                 palette = preferences.themePalette,
                 darkModeOption = preferences.darkMode,
+                languageCode = preferences.languageCode,
+                uiFontId = preferences.uiFontId,
             ) {
                 AppNavigation(preferencesStore = preferencesStore)
             }
@@ -141,6 +156,7 @@ private fun AuthenticatedShell(
     val context = LocalContext.current
     val appContext = context.applicationContext
     val colors = CollageXThemeTokens.colors
+    val strings = CollageXThemeTokens.strings
 
     // Resolve provisioned named Firestore database ID at the ViewModel factory boundary
     val viewModel: CollageXViewModel = viewModel(
@@ -173,6 +189,9 @@ private fun AuthenticatedShell(
     // Pending launch parameters for Android Photo Picker
     var pendingLayout by remember { mutableStateOf(LayoutType.BENTO) }
     var pendingCanvasSpec by remember { mutableStateOf<CanvasSpec?>(null) }
+    var pendingAutoFitPreset by remember { mutableStateOf<AutoFitPreset?>(AutoFitPreset.BALANCED) }
+    var chooserRatioId by remember { mutableStateOf("3_2") }
+    var chooserAutoFit by remember { mutableStateOf<AutoFitPreset?>(AutoFitPreset.BALANCED) }
 
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val projectsState by viewModel.projectsState.collectAsStateWithLifecycle()
@@ -181,6 +200,21 @@ private fun AuthenticatedShell(
     val editorState by viewModel.editorState.collectAsStateWithLifecycle()
     val exportState by viewModel.exportState.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
+
+    // First-run Push Notifications & Access onboarding launcher (Play-Policy compliant)
+    val firstRunNotificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        viewModel.updatePreferences {
+            it.copy(
+                notificationsEnabled = granted,
+                permissionsPromptSeen = true,
+            )
+        }
+        if (granted) {
+            viewModel.showToast("Push notifications allowed")
+        }
+    }
 
     // Zero-permission Android Photo Picker supporting up to 100 photos (2–50+ requirement)
     val multiPhotoPicker = rememberLauncherForActivityResult(
@@ -203,15 +237,21 @@ private fun AuthenticatedShell(
                 layoutType = pendingLayout,
                 canvasSpec = pendingCanvasSpec,
                 useSamplePack = false,
+                autoFitPreset = pendingAutoFitPreset,
             ) {
                 navController.navigate(CxRoutes.EDITOR)
             }
         }
     }
 
-    fun launchPhotoPickerForNewCollage(layout: LayoutType, spec: CanvasSpec?) {
+    fun launchPhotoPickerForNewCollage(
+        layout: LayoutType,
+        spec: CanvasSpec?,
+        autoFitPreset: AutoFitPreset? = AutoFitPreset.BALANCED,
+    ) {
         pendingLayout = layout
         pendingCanvasSpec = spec
+        pendingAutoFitPreset = autoFitPreset
         multiPhotoPicker.launch(
             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
         )
@@ -346,12 +386,13 @@ private fun AuthenticatedShell(
                 if (activeProject != null) {
                     CustomSizeScreen(
                         project = activeProject,
+                        autoFitPreset = editorState.autoFitPreset,
                         onBack = { navController.popBackStack() },
                         onGoHome = {
                             navController.popBackStack(CxRoutes.MAIN, inclusive = false)
                         },
-                        onApplyChanges = { updatedSpec ->
-                            viewModel.applyCustomCanvasSize(updatedSpec)
+                        onApplyChanges = { updatedSpec, autoFit ->
+                            viewModel.applyCustomCanvasSize(updatedSpec, autoFit)
                             // If opened directly from Home -> Resize, navigate into Editor; otherwise pop back to Editor
                             val prevRoute = navController.previousBackStackEntry?.destination?.route
                             if (prevRoute == CxRoutes.EDITOR) {
@@ -372,8 +413,13 @@ private fun AuthenticatedShell(
                     ExportScreen(
                         project = activeProject,
                         defaultStripExif = preferences.stripExifDefault,
+                        notificationsEnabled = preferences.notificationsEnabled,
+                        autoShareDefault = preferences.autoShareAfterExport,
                         exportState = exportState,
                         onBack = { navController.popBackStack() },
+                        onUpdateAutoShare = { enabled ->
+                            viewModel.updatePreferences { it.copy(autoShareAfterExport = enabled) }
+                        },
                         onStartExport = viewModel::startExport,
                         onCancelExport = viewModel::cancelExport,
                         onResetExportState = viewModel::resetExportState,
@@ -390,8 +436,15 @@ private fun AuthenticatedShell(
         )
     }
 
-    // Create Collage Chooser Bottom Sheet (triggered by central '+' button)
+    // Create Collage Chooser Bottom Sheet (triggered by central '+' button) with Auto-Fit Ratio & Style
     if (showCreateChooser) {
+        val chosenRatio = CanvasMath.StandardPresets.firstOrNull { it.id == chooserRatioId }
+            ?: CanvasMath.StandardPresets.last()
+        val chosenCanvas = CanvasSpec(
+            width = chosenRatio.suggestedPxW.toDouble(),
+            height = chosenRatio.suggestedPxH.toDouble(),
+            dpi = preferences.defaultDpi,
+        )
         ModalBottomSheet(
             onDismissRequest = { showCreateChooser = false },
             containerColor = colors.surface,
@@ -400,38 +453,76 @@ private fun AuthenticatedShell(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = CxSpace.S16, vertical = CxSpace.S12),
                 verticalArrangement = Arrangement.spacedBy(CxSpace.S12),
             ) {
-                Text("Create New Collage", style = CxType.Heading, color = colors.text)
+                Text(strings.createNewCollageTitle, style = CxType.Heading, color = colors.text)
                 Text(
-                    "Pick 2 to 50+ photos from your device or start immediately with curated scenes.",
+                    strings.createNewCollageSubtitle,
                     style = CxType.Caption,
                     color = colors.textMuted,
                 )
+
+                Text(strings.targetRatioAndSize, style = CxType.CaptionMedium, color = colors.textMuted)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(CxSpace.S8)) {
+                    items(CanvasMath.StandardPresets, key = { it.id }) { ratio ->
+                        CxChip(
+                            label = "${ratio.ratioLabel} ${ratio.name}",
+                            selected = chooserRatioId == ratio.id,
+                            onClick = { chooserRatioId = ratio.id },
+                            testTag = "create_ratio_${ratio.id}",
+                        )
+                    }
+                }
+
+                Text(strings.autoFitOrganization, style = CxType.CaptionMedium, color = colors.textMuted)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(CxSpace.S8)) {
+                    items(AutoFitPreset.entries, key = { it.name }) { preset ->
+                        CxChip(
+                            label = strings.autoFitPresetLabel(preset),
+                            selected = chooserAutoFit == preset,
+                            onClick = { chooserAutoFit = preset },
+                            testTag = "create_autofit_${preset.name}",
+                        )
+                    }
+                    item {
+                        CxChip(
+                            label = strings.manualLabel,
+                            selected = chooserAutoFit == null,
+                            onClick = { chooserAutoFit = null },
+                            testTag = "create_autofit_manual",
+                        )
+                    }
+                }
+
                 CxListItem(
-                    title = "Pick Photos from Gallery (2–50+)",
-                    subtitle = "Uses Android Photo Picker · Zero storage permissions",
+                    title = strings.pickPhotosFromGallery,
+                    subtitle = "${chosenRatio.ratioLabel} (${chosenRatio.suggestedPxW}×${chosenRatio.suggestedPxH}px) · ${chooserAutoFit?.let { strings.autoFitPresetLabel(it) } ?: strings.manualLabel}",
                     leadingIcon = Icons.Rounded.PhotoLibrary,
                     onClick = {
                         showCreateChooser = false
-                        launchPhotoPickerForNewCollage(LayoutType.BENTO, null)
+                        launchPhotoPickerForNewCollage(LayoutType.BENTO, chosenCanvas, chooserAutoFit)
                     },
                     testTag = "create_pick_photos",
                 )
                 CxListItem(
-                    title = "50+ Photo Wall Mosaic",
-                    subtitle = "Adaptive dense grid for large collections",
+                    title = strings.photoWallMosaicTitle,
+                    subtitle = strings.photoWallMosaicSubtitle,
                     leadingIcon = Icons.Rounded.GridView,
                     onClick = {
                         showCreateChooser = false
-                        launchPhotoPickerForNewCollage(LayoutType.MOSAIC, CanvasSpec(3000.0, 3000.0))
+                        launchPhotoPickerForNewCollage(
+                            LayoutType.MOSAIC,
+                            CanvasSpec(3000.0, 3000.0, dpi = preferences.defaultDpi),
+                            chooserAutoFit ?: AutoFitPreset.BALANCED,
+                        )
                     },
                     testTag = "create_mosaic_photos",
                 )
                 CxListItem(
-                    title = "Start with 6-Photo Starter Pack",
-                    subtitle = "Explore layouts, custom sizing, and export right away",
+                    title = strings.starterPackTitle,
+                    subtitle = "${strings.starterPackSubtitle} (${chosenRatio.ratioLabel})",
                     leadingIcon = Icons.Rounded.AutoAwesomeMosaic,
                     onClick = {
                         showCreateChooser = false
@@ -439,8 +530,9 @@ private fun AuthenticatedShell(
                             uris = emptyList(),
                             title = "Spring Blossom Collage",
                             layoutType = LayoutType.BENTO,
-                            canvasSpec = CanvasSpec(3000.0, 2000.0),
+                            canvasSpec = chosenCanvas,
                             useSamplePack = true,
+                            autoFitPreset = chooserAutoFit,
                         ) {
                             navController.navigate(CxRoutes.EDITOR)
                         }
@@ -450,5 +542,61 @@ private fun AuthenticatedShell(
                 Spacer(Modifier.height(CxSpace.S8))
             }
         }
+    }
+
+    // First-run Permissions & Access Welcome Dialog
+    if (!preferences.permissionsPromptSeen) {
+        AlertDialog(
+            onDismissRequest = {
+                viewModel.updatePreferences { it.copy(permissionsPromptSeen = true) }
+            },
+            containerColor = colors.surface,
+            title = {
+                Text(strings.settingsPermissions, style = CxType.Heading, color = colors.text)
+            },
+            text = {
+                Text(
+                    text = "• ${strings.settingsNotifications}: ${strings.notificationsReadySub}\n" +
+                        "• ${strings.galleryPickerTitle}: ${strings.galleryPickerSub}\n" +
+                        "• ${strings.filesFolderTitle}: ${strings.filesFolderSub}",
+                    style = CxType.Body,
+                    color = colors.textMuted,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            val alreadyGranted = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.POST_NOTIFICATIONS,
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (alreadyGranted) {
+                                viewModel.updatePreferences {
+                                    it.copy(notificationsEnabled = true, permissionsPromptSeen = true)
+                                }
+                            } else {
+                                firstRunNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        } else {
+                            viewModel.updatePreferences {
+                                it.copy(notificationsEnabled = true, permissionsPromptSeen = true)
+                            }
+                        }
+                    },
+                ) {
+                    Text(strings.allowNotificationsBtn, color = colors.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.updatePreferences { it.copy(permissionsPromptSeen = true) }
+                    },
+                ) {
+                    Text(strings.continueLabel, color = colors.textMuted)
+                }
+            },
+        )
     }
 }

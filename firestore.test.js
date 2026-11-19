@@ -303,6 +303,33 @@ test("Exports subcollection: create/list/delete allowed for owner, update blocke
       .collection("users")
       .doc(ALICE_UID)
       .collection("exports")
+      .doc("exp_heic")
+      .set({ ...validExportPayload(ALICE_UID, created), format: "HEIC" })
+  );
+
+  await assertSucceeds(
+    aliceDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("exports")
+      .doc("exp_webp_lossless")
+      .set({ ...validExportPayload(ALICE_UID, created), format: "WEBP_LOSSLESS" })
+  );
+
+  await assertSucceeds(
+    aliceDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("exports")
+      .doc("exp_bmp")
+      .set({ ...validExportPayload(ALICE_UID, created), format: "BMP" })
+  );
+
+  await assertSucceeds(
+    aliceDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("exports")
       .doc("exp_1")
       .delete()
   );
@@ -328,7 +355,8 @@ test("Preferences subcollection: create and update validated theme and settings"
       .collection("preferences")
       .doc("main")
       .update({
-        themePalette: "LAVENDER",
+        themePalette: "MIDNIGHT_INDIGO",
+        languageCode: "en-GB",
         darkMode: "DARK",
         updatedAt: new Date(Date.now() - 1000),
       })

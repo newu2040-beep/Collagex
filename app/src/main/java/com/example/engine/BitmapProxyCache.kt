@@ -107,6 +107,55 @@ object BitmapProxyCache {
     fun clear() {
         cache.evictAll()
     }
+
+    /**
+     * Fast, memory-safe 3x3 unsharp-mask convolution kernel for photo sharpening.
+     * Returns a newly allocated sharpened Bitmap when amount > 0.02f, or the original bitmap otherwise.
+     */
+    fun applySharpen(src: Bitmap, amount: Float): Bitmap {
+        val clamped = amount.coerceIn(0f, 1f)
+        if (clamped <= 0.02f || src.isRecycled) return src
+        val w = src.width
+        val h = src.height
+        if (w < 3 || h < 3) return src
+
+        val srcPixels = IntArray(w * h)
+        src.getPixels(srcPixels, 0, w, 0, 0, w, h)
+        val outPixels = srcPixels.copyOf()
+
+        // Kernel: center = 1 + 4*k, 4-neighbors = -k
+        val k = clamped * 0.9f
+        val centerW = 1f + 4f * k
+
+        for (y in 1 until h - 1) {
+            val rowOff = y * w
+            val upOff = rowOff - w
+            val dnOff = rowOff + w
+            for (x in 1 until w - 1) {
+                val idx = rowOff + x
+                val c = srcPixels[idx]
+                val u = srcPixels[upOff + x]
+                val d = srcPixels[dnOff + x]
+                val l = srcPixels[idx - 1]
+                val r = srcPixels[idx + 1]
+
+                val a = (c ushr 24) and 0xFF
+                val cr = (c ushr 16) and 0xFF
+                val cg = (c ushr 8) and 0xFF
+                val cb = c and 0xFF
+
+                val nr = (cr * centerW - (((u ushr 16) and 0xFF) + ((d ushr 16) and 0xFF) + ((l ushr 16) and 0xFF) + ((r ushr 16) and 0xFF)) * k)
+                    .toInt().coerceIn(0, 255)
+                val ng = (cg * centerW - (((u ushr 8) and 0xFF) + ((d ushr 8) and 0xFF) + ((l ushr 8) and 0xFF) + ((r ushr 8) and 0xFF)) * k)
+                    .toInt().coerceIn(0, 255)
+                val nb = (cb * centerW - ((u and 0xFF) + (d and 0xFF) + (l and 0xFF) + (r and 0xFF)) * k)
+                    .toInt().coerceIn(0, 255)
+
+                outPixels[idx] = (a shl 24) or (nr shl 16) or (ng shl 8) or nb
+            }
+        }
+        return Bitmap.createBitmap(outPixels, w, h, Bitmap.Config.ARGB_8888)
+    }
 }
 
 /**
@@ -116,7 +165,7 @@ object PhotoColorMatrixBuilder {
     fun buildAndroidColorMatrix(adj: PhotoAdjustments): ColorMatrix {
         val matrix = ColorMatrix()
 
-        // Preset filter base
+        // Preset filter base (12 curated filters)
         when (adj.filter) {
             PhotoFilter.ORIGINAL -> Unit
             PhotoFilter.BLOSSOM -> {
@@ -158,8 +207,7 @@ object PhotoColorMatrixBuilder {
                 )
             }
             PhotoFilter.FILM -> {
-                val sat = ColorMatrix().apply { setSaturation(0.78f) }
-                matrix.postConcat(sat)
+                matrix.postConcat(ColorMatrix().apply { setSaturation(0.78f) })
                 matrix.postConcat(
                     ColorMatrix(
                         floatArrayOf(
@@ -174,16 +222,104 @@ object PhotoColorMatrixBuilder {
             PhotoFilter.MONO -> {
                 matrix.postConcat(ColorMatrix().apply { setSaturation(0f) })
             }
+            PhotoFilter.VIVID -> {
+                matrix.postConcat(ColorMatrix().apply { setSaturation(1.38f) })
+                val c = 1.08f
+                val t = (1f - c) * 128f + 4f
+                matrix.postConcat(
+                    ColorMatrix(
+                        floatArrayOf(
+                            c, 0f, 0f, 0f, t,
+                            0f, c, 0f, 0f, t,
+                            0f, 0f, c, 0f, t,
+                            0f, 0f, 0f, 1f, 0f,
+                        ),
+                    ),
+                )
+            }
+            PhotoFilter.COOL -> {
+                matrix.postConcat(
+                    ColorMatrix(
+                        floatArrayOf(
+                            0.92f, 0f, 0f, 0f, -4f,
+                            0f, 1.02f, 0f, 0f, 2f,
+                            0f, 0f, 1.15f, 0f, 12f,
+                            0f, 0f, 0f, 1f, 0f,
+                        ),
+                    ),
+                )
+            }
+            PhotoFilter.SEPIA -> {
+                matrix.postConcat(
+                    ColorMatrix(
+                        floatArrayOf(
+                            0.393f, 0.769f, 0.189f, 0f, 0f,
+                            0.349f, 0.686f, 0.168f, 0f, 0f,
+                            0.272f, 0.534f, 0.131f, 0f, 0f,
+                            0f, 0f, 0f, 1f, 0f,
+                        ),
+                    ),
+                )
+            }
+            PhotoFilter.SUNSET -> {
+                matrix.postConcat(ColorMatrix().apply { setSaturation(1.18f) })
+                matrix.postConcat(
+                    ColorMatrix(
+                        floatArrayOf(
+                            1.18f, 0f, 0f, 0f, 14f,
+                            0f, 0.98f, 0f, 0f, 4f,
+                            0f, 0f, 0.88f, 0f, 6f,
+                            0f, 0f, 0f, 1f, 0f,
+                        ),
+                    ),
+                )
+            }
+            PhotoFilter.MATTE -> {
+                matrix.postConcat(ColorMatrix().apply { setSaturation(0.84f) })
+                matrix.postConcat(
+                    ColorMatrix(
+                        floatArrayOf(
+                            0.88f, 0f, 0f, 0f, 24f,
+                            0f, 0.88f, 0f, 0f, 22f,
+                            0f, 0f, 0.90f, 0f, 26f,
+                            0f, 0f, 0f, 1f, 0f,
+                        ),
+                    ),
+                )
+            }
+            PhotoFilter.NOIR -> {
+                matrix.postConcat(ColorMatrix().apply { setSaturation(0f) })
+                val c = 1.32f
+                val t = (1f - c) * 128f - 8f
+                matrix.postConcat(
+                    ColorMatrix(
+                        floatArrayOf(
+                            c, 0f, 0f, 0f, t,
+                            0f, c, 0f, 0f, t,
+                            0f, 0f, c, 0f, t,
+                            0f, 0f, 0f, 1f, 0f,
+                        ),
+                    ),
+                )
+            }
         }
 
-        // Saturation
-        if (adj.saturation != 1f) {
-            matrix.postConcat(ColorMatrix().apply { setSaturation(adj.saturation.coerceIn(0f, 2f)) })
+        // Combined Saturation + Vibrance
+        val sat = (adj.saturation + adj.vibrance * 0.45f).coerceIn(0f, 2.2f)
+        if (sat != 1f) {
+            matrix.postConcat(ColorMatrix().apply { setSaturation(sat) })
         }
 
-        // Contrast + brightness + exposure
-        val c = adj.contrast.coerceIn(0.4f, 1.8f)
-        val b = (adj.brightness.coerceIn(-0.5f, 0.5f) + adj.exposure.coerceIn(-0.5f, 0.5f) * 0.8f) * 255f
+        // Contrast + Brightness + Exposure + Highlights + Shadows
+        val hl = adj.highlights.coerceIn(-0.5f, 0.5f)
+        val sh = adj.shadows.coerceIn(-0.5f, 0.5f)
+        val c = (adj.contrast + hl * 0.18f - sh * 0.14f).coerceIn(0.4f, 1.9f)
+        val b = (
+            adj.brightness.coerceIn(-0.5f, 0.5f) +
+                adj.exposure.coerceIn(-0.5f, 0.5f) * 0.8f +
+                sh * 0.22f +
+                hl * 0.16f
+            ) * 255f
         val t = (1f - c) * 128f + b
         if (c != 1f || b != 0f) {
             matrix.postConcat(
@@ -198,7 +334,7 @@ object PhotoColorMatrixBuilder {
             )
         }
 
-        // Warmth
+        // Warmth (red/blue temperature shift)
         val w = adj.warmth.coerceIn(-0.5f, 0.5f)
         if (w != 0f) {
             matrix.postConcat(
@@ -207,6 +343,38 @@ object PhotoColorMatrixBuilder {
                         1f + w * 0.25f, 0f, 0f, 0f, w * 18f,
                         0f, 1f, 0f, 0f, 0f,
                         0f, 0f, 1f - w * 0.25f, 0f, -w * 18f,
+                        0f, 0f, 0f, 1f, 0f,
+                    ),
+                ),
+            )
+        }
+
+        // Tint (green <-> magenta shift)
+        val tn = adj.tint.coerceIn(-0.5f, 0.5f)
+        if (tn != 0f) {
+            matrix.postConcat(
+                ColorMatrix(
+                    floatArrayOf(
+                        1f + tn * 0.14f, 0f, 0f, 0f, tn * 10f,
+                        0f, 1f - tn * 0.20f, 0f, 0f, -tn * 14f,
+                        0f, 0f, 1f + tn * 0.14f, 0f, tn * 10f,
+                        0f, 0f, 0f, 1f, 0f,
+                    ),
+                ),
+            )
+        }
+
+        // Fade (lifted blacks matte film look)
+        val f = adj.fade.coerceIn(0f, 0.6f)
+        if (f > 0.01f) {
+            val scale = 1f - f * 0.35f
+            val lift = f * 72f
+            matrix.postConcat(
+                ColorMatrix(
+                    floatArrayOf(
+                        scale, 0f, 0f, 0f, lift,
+                        0f, scale, 0f, 0f, lift,
+                        0f, 0f, scale, 0f, lift,
                         0f, 0f, 0f, 1f, 0f,
                     ),
                 ),

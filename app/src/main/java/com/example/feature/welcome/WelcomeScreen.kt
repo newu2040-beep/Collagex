@@ -54,6 +54,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
+import com.example.BuildConfig
 import com.example.R
 import com.example.core.designsystem.CollageXLogoMark
 import com.example.core.designsystem.CxCard
@@ -76,6 +77,7 @@ fun WelcomeScreen(
     val scope = rememberCoroutineScope()
     val credentialManager = remember(context) { CredentialManager.create(context) }
     val colors = CollageXThemeTokens.colors
+    val strings = CollageXThemeTokens.strings
 
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -157,8 +159,21 @@ fun WelcomeScreen(
                     textAlign = TextAlign.Center,
                 )
 
+                Surface(
+                    shape = RoundedCornerShape(CxRadius.Pill),
+                    color = colors.primarySoft,
+                    border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.25f)),
+                ) {
+                    Text(
+                        text = "${strings.versionWord} ${BuildConfig.VERSION_NAME}",
+                        style = CxType.CaptionMedium,
+                        color = colors.primary,
+                        modifier = Modifier.padding(horizontal = CxSpace.S12, vertical = CxSpace.S4),
+                    )
+                }
+
                 Text(
-                    text = stringResource(R.string.welcome_tagline),
+                    text = strings.welcomeTagline,
                     style = CxType.Body,
                     color = colors.textMuted,
                     textAlign = TextAlign.Center,
@@ -193,7 +208,7 @@ fun WelcomeScreen(
                 }
 
                 CxPrimaryButton(
-                    text = stringResource(R.string.welcome_google_cta),
+                    text = strings.welcomeGoogleCta,
                     leadingIcon = Icons.Rounded.Login,
                     loading = isLoading,
                     onClick = {
@@ -220,7 +235,7 @@ fun WelcomeScreen(
                 )
 
                 CxSecondaryButton(
-                    text = stringResource(R.string.welcome_about_cta),
+                    text = strings.welcomeAboutCta,
                     leadingIcon = Icons.Rounded.Info,
                     onClick = { showAboutSheet = true },
                     testTag = "welcome_about_button",
@@ -233,9 +248,10 @@ fun WelcomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(CxSpace.S8),
                 ) {
                     Text(
-                        text = stringResource(R.string.open_source_badge),
+                        text = "${strings.openSourceBadge} · ${strings.madeWithLoveByRahul}",
                         style = CxType.CaptionMedium,
                         color = colors.textMuted,
+                        textAlign = TextAlign.Center,
                     )
                 }
             }
@@ -265,23 +281,28 @@ fun WelcomeScreen(
                         tint = colors.primary,
                     )
                     Text(
-                        text = stringResource(R.string.open_source_banner_title),
+                        text = strings.openSourceBannerTitle,
                         style = CxType.Heading,
                         color = colors.text,
                     )
                 }
                 Text(
-                    text = "CollageX is completely free and open source with zero paywalls, zero watermarks, and zero AI gimmicks. Every layout, 50+ photo grid, post-creation custom canvas sizing, and 4K/8K JPEG/PNG/WebP/TIFF/PDF export is available to everyone.",
+                    text = "${strings.versionWord} ${BuildConfig.VERSION_NAME} · ${strings.madeWithLoveByRahul}",
+                    style = CxType.BodyMedium,
+                    color = colors.primary,
+                )
+                Text(
+                    text = strings.welcomeAboutBody1,
                     style = CxType.Body,
                     color = colors.textMuted,
                 )
                 Text(
-                    text = "Sign in with Google to securely isolate and sync your collage projects, custom canvas settings, and export history across devices via Firebase Firestore. Your photos remain private on your device.",
+                    text = strings.welcomeAboutBody2,
                     style = CxType.Body,
                     color = colors.textMuted,
                 )
                 CxPrimaryButton(
-                    text = "Got it",
+                    text = strings.closeLabel,
                     onClick = { showAboutSheet = false },
                     testTag = "about_sheet_close",
                 )

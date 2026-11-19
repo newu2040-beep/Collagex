@@ -135,7 +135,7 @@
         },
         "format": {
           "type": "string",
-          "enum": ["JPEG", "PNG", "WEBP", "TIFF", "PDF"],
+          "enum": ["JPEG", "PNG", "HEIC", "WEBP", "WEBP_LOSSLESS", "BMP", "TIFF", "PDF"],
           "description": "Output image or document format."
         },
         "widthPx": {
@@ -194,7 +194,7 @@
         },
         "themePalette": {
           "type": "string",
-          "enum": ["PASTEL_PINK", "LAVENDER", "MINT", "PEACH", "SKY_BLUE", "NEUTRAL"],
+          "enum": ["PASTEL_PINK", "LAVENDER", "MINT", "PEACH", "SKY_BLUE", "NEUTRAL", "SAKURA_ROSE", "SUNSET_CORAL", "FOREST_SAGE", "OCEAN_TEAL", "GOLDEN_HONEY", "MIDNIGHT_INDIGO"],
           "description": "Selected visual accent palette."
         },
         "darkMode": {

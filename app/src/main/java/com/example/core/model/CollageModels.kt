@@ -9,6 +9,12 @@ enum class ThemePalette(val displayName: String) {
     PEACH("Peach"),
     SKY_BLUE("Sky Blue"),
     NEUTRAL("Neutral"),
+    SAKURA_ROSE("Sakura Rose"),
+    SUNSET_CORAL("Sunset Coral"),
+    FOREST_SAGE("Forest Sage"),
+    OCEAN_TEAL("Ocean Teal"),
+    GOLDEN_HONEY("Golden Honey"),
+    MIDNIGHT_INDIGO("Midnight Indigo"),
     ;
 
     companion object {
@@ -125,6 +131,12 @@ enum class PhotoFilter(val label: String) {
     CRISP("Crisp"),
     FILM("Film"),
     MONO("Mono"),
+    VIVID("Vivid"),
+    COOL("Cool"),
+    SEPIA("Sepia"),
+    SUNSET("Sunset"),
+    MATTE("Matte"),
+    NOIR("Noir"),
     ;
 
     companion object {
@@ -159,7 +171,10 @@ enum class ExportFormat(
 ) {
     JPEG("JPEG", "jpg", "image/jpeg", supportsAlpha = false, supportsQuality = true),
     PNG("PNG", "png", "image/png", supportsAlpha = true, supportsQuality = false),
+    HEIC("HEIC", "heic", "image/heic", supportsAlpha = false, supportsQuality = true),
     WEBP("WebP", "webp", "image/webp", supportsAlpha = true, supportsQuality = true),
+    WEBP_LOSSLESS("WebP Lossless", "webp", "image/webp", supportsAlpha = true, supportsQuality = false),
+    BMP("BMP", "bmp", "image/bmp", supportsAlpha = true, supportsQuality = false),
     TIFF("TIFF", "tif", "image/tiff", supportsAlpha = true, supportsQuality = false),
     PDF("PDF", "pdf", "application/pdf", supportsAlpha = false, supportsQuality = false),
     ;
@@ -175,6 +190,7 @@ enum class ExportResolutionPreset(val label: String, val maxLongEdgePx: Int?) {
     HD_1080("1080p", 1920),
     QHD_2K("2K", 2560),
     UHD_4K("4K", 3840),
+    UHD_6K("6K Ultra", 6144),
     UHD_8K("8K Tiled", 7680),
 }
 
@@ -221,6 +237,13 @@ data class PhotoAdjustments(
     val saturation: Float = 1f,
     val warmth: Float = 0f,
     val exposure: Float = 0f,
+    val sharpen: Float = 0f,
+    val vignette: Float = 0f,
+    val fade: Float = 0f,
+    val tint: Float = 0f,
+    val highlights: Float = 0f,
+    val shadows: Float = 0f,
+    val vibrance: Float = 0f,
     val filter: PhotoFilter = PhotoFilter.ORIGINAL,
 )
 
@@ -319,9 +342,12 @@ data class ExportRecord(
 data class UserPreferences(
     val themePalette: ThemePalette = ThemePalette.PASTEL_PINK,
     val darkMode: DarkModeOption = DarkModeOption.SYSTEM,
-    val languageCode: String = "en",
+    val languageCode: String = "en-GB",
+    val uiFontId: String = "PLUS_JAKARTA",
     val notificationsEnabled: Boolean = false,
     val stripExifDefault: Boolean = true,
+    val autoShareAfterExport: Boolean = false,
+    val permissionsPromptSeen: Boolean = false,
     val defaultDpi: Int = 300,
     val defaultUnit: DimensionUnit = DimensionUnit.PX,
     val cloudAutoSync: Boolean = true,

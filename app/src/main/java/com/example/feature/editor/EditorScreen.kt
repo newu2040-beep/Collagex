@@ -34,19 +34,25 @@ import androidx.compose.material.icons.automirrored.rounded.Redo
 import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AspectRatio
+import androidx.compose.material.icons.rounded.AutoAwesomeMosaic
 import androidx.compose.material.icons.rounded.AutoFixHigh
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.EmojiEmotions
 import androidx.compose.material.icons.rounded.Gradient
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,6 +80,7 @@ import com.example.core.designsystem.CxSwitchRow
 import com.example.core.designsystem.CxType
 import com.example.core.model.BackgroundType
 import com.example.core.model.CanvasMath
+import com.example.core.model.CollageLayer
 import com.example.core.model.LayerType
 import com.example.core.model.LayoutType
 import com.example.core.model.PhotoFitMode
@@ -126,6 +133,7 @@ fun EditorScreen(
     onOpenExport: () -> Unit,
 ) {
     val colors = CollageXThemeTokens.colors
+    val strings = CollageXThemeTokens.strings
     val project = editorState.project
 
     var activeSection by remember { mutableStateOf(EditorSectionTab.LAYOUT) }
@@ -134,6 +142,8 @@ fun EditorScreen(
     var showFilterSheet by remember { mutableStateOf(false) }
     var showSelectedLayerSheet by remember { mutableStateOf(false) }
     var showMoreSheet by remember { mutableStateOf(false) }
+    var showAutoFitSheet by remember { mutableStateOf(false) }
+    var pendingDeleteLayer by remember { mutableStateOf<CollageLayer?>(null) }
 
     // Android Photo Picker for adding up to 50+ photos without storage permissions
     val addPhotosLauncher = rememberLauncherForActivityResult(
@@ -168,9 +178,9 @@ fun EditorScreen(
         ) {
             CxEmptyState(
                 icon = Icons.Rounded.Image,
-                title = "No active collage",
-                message = "Return home to pick photos or open an existing project.",
-                actionLabel = "Go Home",
+                title = strings.noActiveCollageTitle,
+                message = strings.noActiveCollageMsg,
+                actionLabel = strings.goHomeLabel,
                 onAction = onBack,
             )
         }
@@ -203,14 +213,14 @@ fun EditorScreen(
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = stringResource(R.string.editor_title),
+                    text = strings.editorTitle,
                     style = CxType.Heading,
                     color = colors.text,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "${dims.widthPx}×${dims.heightPx}px · ${editorState.saveStatus}",
+                    text = "${dims.widthPx}×${dims.heightPx}px · ${strings.translateSaveStatus(editorState.saveStatus)}",
                     style = CxType.Caption,
                     color = colors.textMuted,
                     maxLines = 1,
@@ -244,7 +254,7 @@ fun EditorScreen(
                     .testTag("editor_export_button"),
             ) {
                 Text(
-                    text = stringResource(R.string.editor_export),
+                    text = strings.editorExport,
                     style = CxType.CaptionMedium,
                 )
             }
@@ -305,34 +315,178 @@ fun EditorScreen(
                 )
             }
 
-            // Top-left floating Canvas Size badge -> direct post-creation resize entry point!
-            Surface(
-                shape = RoundedCornerShape(CxRadius.Pill),
-                color = colors.surface.copy(alpha = 0.92f),
-                border = BorderStroke(1.dp, colors.border),
+            // Top-left floating Canvas Size + One-Tap Auto-Fit badges
+            Row(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(CxSpace.S8)
-                    .clip(RoundedCornerShape(CxRadius.Pill))
-                    .clickable(role = Role.Button, onClick = onOpenCustomSize)
-                    .testTag("editor_canvas_size_badge"),
+                    .padding(start = CxSpace.S8, top = CxSpace.S8, end = 56.dp),
+                horizontalArrangement = Arrangement.spacedBy(CxSpace.S8),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = CxSpace.S12, vertical = CxSpace.S4),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(CxSpace.S4),
+                Surface(
+                    shape = RoundedCornerShape(CxRadius.Pill),
+                    color = colors.surface.copy(alpha = 0.92f),
+                    border = BorderStroke(1.dp, colors.border),
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .clip(RoundedCornerShape(CxRadius.Pill))
+                        .clickable(role = Role.Button, onClick = onOpenCustomSize)
+                        .testTag("editor_canvas_size_badge"),
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.AspectRatio,
-                        contentDescription = stringResource(R.string.cd_canvas_size),
-                        tint = colors.primary,
-                        modifier = Modifier.size(16.dp),
+                    Row(
+                        modifier = Modifier.padding(horizontal = CxSpace.S12, vertical = CxSpace.S4),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(CxSpace.S4),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.AspectRatio,
+                            contentDescription = stringResource(R.string.cd_canvas_size),
+                            tint = colors.primary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = "${CanvasMath.formatDimension(project.canvas.width, project.canvas.unit)}×${CanvasMath.formatDimension(project.canvas.height, project.canvas.unit)} ${project.canvas.unit.shortLabel}",
+                            style = CxType.CaptionMedium,
+                            color = colors.text,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(CxRadius.Pill),
+                    color = if (editorState.autoFitEnabled) colors.primarySoft.copy(alpha = 0.95f) else colors.surface.copy(alpha = 0.92f),
+                    border = BorderStroke(1.dp, if (editorState.autoFitEnabled) colors.primary else colors.border),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(CxRadius.Pill))
+                        .clickable(role = Role.Button) { showAutoFitSheet = true }
+                        .testTag("editor_autofit_badge"),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = CxSpace.S12, vertical = CxSpace.S4),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(CxSpace.S4),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.AutoAwesomeMosaic,
+                            contentDescription = strings.autoFitLabel,
+                            tint = colors.primary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = strings.autoFitLabel,
+                            style = CxType.CaptionMedium,
+                            color = colors.primary,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2b. Quick Selected Layer Bar (Photo / Text / Sticker): Edit · Don't Delete (Keep) · Delete
+        if (selectedLayer != null) {
+            val typeIcon = when (selectedLayer.type) {
+                LayerType.PHOTO -> Icons.Rounded.Image
+                LayerType.TEXT -> Icons.Rounded.TextFields
+                LayerType.STICKER -> Icons.Rounded.EmojiEmotions
+            }
+            val typeLabel = strings.layerKindLabel(selectedLayer.type)
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = CxSpace.S16, vertical = CxSpace.S4),
+                horizontalArrangement = Arrangement.spacedBy(CxSpace.S8),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(CxRadius.Pill),
+                        color = colors.surface,
+                        border = BorderStroke(1.dp, colors.border),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = CxSpace.S12, vertical = CxSpace.S8),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(CxSpace.S4),
+                        ) {
+                            Icon(
+                                imageVector = typeIcon,
+                                contentDescription = null,
+                                tint = colors.primary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Text(
+                                text = "$typeLabel: ${selectedLayer.label.ifBlank { typeLabel }.take(14)}",
+                                style = CxType.CaptionMedium,
+                                color = colors.text,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+                item {
+                    CxChip(
+                        label = when (selectedLayer.type) {
+                            LayerType.TEXT -> strings.editText
+                            LayerType.STICKER -> strings.editSticker
+                            LayerType.PHOTO -> strings.editPhoto
+                        },
+                        selected = false,
+                        leadingIcon = Icons.Rounded.Edit,
+                        onClick = {
+                            if (selectedLayer.type == LayerType.TEXT) showTextSheet = true
+                            else showSelectedLayerSheet = true
+                        },
+                        testTag = "quick_edit_selected_layer",
                     )
-                    Text(
-                        text = "${CanvasMath.formatDimension(project.canvas.width, project.canvas.unit)}×${CanvasMath.formatDimension(project.canvas.height, project.canvas.unit)} ${project.canvas.unit.shortLabel}",
-                        style = CxType.CaptionMedium,
-                        color = colors.text,
+                }
+                item {
+                    CxChip(
+                        label = if (selectedLayer.locked) strings.dontDeleteOnLabel else strings.dontDeleteLabel,
+                        selected = selectedLayer.locked,
+                        leadingIcon = if (selectedLayer.locked) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
+                        onClick = { viewModel.toggleLayerLock(selectedLayer.id) },
+                        testTag = "quick_protect_selected_layer",
                     )
+                }
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(CxRadius.Pill),
+                        color = if (selectedLayer.locked) colors.surface2 else colors.danger.copy(alpha = 0.12f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (selectedLayer.locked) colors.border else colors.danger.copy(alpha = 0.5f),
+                        ),
+                        modifier = Modifier
+                            .height(44.dp)
+                            .clip(RoundedCornerShape(CxRadius.Pill))
+                            .clickable(role = Role.Button) {
+                                pendingDeleteLayer = selectedLayer
+                            }
+                            .testTag("quick_delete_selected_layer"),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = CxSpace.S12),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(CxSpace.S4),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Delete,
+                                contentDescription = "${strings.deleteLabel} $typeLabel",
+                                tint = if (selectedLayer.locked) colors.textMuted else colors.danger,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Text(
+                                text = "${strings.deleteLabel} $typeLabel",
+                                style = CxType.CaptionMedium,
+                                color = if (selectedLayer.locked) colors.textMuted else colors.danger,
+                                maxLines = 1,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -356,21 +510,21 @@ fun EditorScreen(
                     horizontalArrangement = Arrangement.spacedBy(CxSpace.S8),
                 ) {
                     CxChip(
-                        label = stringResource(R.string.editor_tab_layout),
+                        label = strings.editorTabLayout,
                         selected = activeSection == EditorSectionTab.LAYOUT,
                         onClick = { activeSection = EditorSectionTab.LAYOUT },
                         modifier = Modifier.weight(1f),
                         testTag = "editor_tab_layout",
                     )
                     CxChip(
-                        label = stringResource(R.string.editor_tab_border),
+                        label = strings.editorTabBorder,
                         selected = activeSection == EditorSectionTab.BORDER,
                         onClick = { activeSection = EditorSectionTab.BORDER },
                         modifier = Modifier.weight(1f),
                         testTag = "editor_tab_border",
                     )
                     CxChip(
-                        label = stringResource(R.string.editor_tab_background),
+                        label = strings.editorTabBackground,
                         selected = activeSection == EditorSectionTab.BACKGROUND,
                         onClick = { activeSection = EditorSectionTab.BACKGROUND },
                         modifier = Modifier.weight(1f),
@@ -416,6 +570,35 @@ fun EditorScreen(
                                         )
                                     }
                                 }
+                                item {
+                                    Surface(
+                                        shape = RoundedCornerShape(CxRadius.Small),
+                                        color = colors.primary,
+                                        modifier = Modifier
+                                            .height(52.dp)
+                                            .clip(RoundedCornerShape(CxRadius.Small))
+                                            .clickable { showAutoFitSheet = true }
+                                            .testTag("editor_layout_autofit_tile"),
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = CxSpace.S12),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(CxSpace.S4),
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.AutoAwesomeMosaic,
+                                                contentDescription = null,
+                                                tint = colors.onPrimary,
+                                                modifier = Modifier.size(18.dp),
+                                            )
+                                            Text(
+                                                text = strings.autoFitLabel,
+                                                style = CxType.CaptionMedium,
+                                                color = colors.onPrimary,
+                                            )
+                                        }
+                                    }
+                                }
                                 items(LayoutType.entries) { layout ->
                                     val selected = project.layoutType == layout
                                     Surface(
@@ -436,7 +619,7 @@ fun EditorScreen(
                                             contentAlignment = Alignment.Center,
                                         ) {
                                             Text(
-                                                text = layout.label,
+                                                text = strings.layoutLabel(layout),
                                                 style = CxType.CaptionMedium,
                                                 color = if (selected) colors.primary else colors.text,
                                             )
@@ -445,14 +628,14 @@ fun EditorScreen(
                                 }
                             }
                             LabeledSlider(
-                                label = stringResource(R.string.editor_border_radius),
+                                label = strings.borderRadius,
                                 valueText = "${project.border.cornerRadius.roundToInt()}px",
                                 value = project.border.cornerRadius,
                                 valueRange = 0f..48f,
                                 onValueChange = { r -> viewModel.updateBorder { it.copy(cornerRadius = r) } },
                             )
                             Text(
-                                text = stringResource(R.string.editor_border_color),
+                                text = strings.borderColor,
                                 style = CxType.CaptionMedium,
                                 color = colors.text,
                             )
@@ -465,35 +648,35 @@ fun EditorScreen(
 
                         EditorSectionTab.BORDER -> {
                             LabeledSlider(
-                                label = stringResource(R.string.editor_border_radius),
+                                label = strings.borderRadius,
                                 valueText = "${project.border.cornerRadius.roundToInt()}px",
                                 value = project.border.cornerRadius,
                                 valueRange = 0f..48f,
                                 onValueChange = { r -> viewModel.updateBorder { it.copy(cornerRadius = r) } },
                             )
                             LabeledSlider(
-                                label = stringResource(R.string.editor_border_spacing),
+                                label = strings.borderSpacing,
                                 valueText = "${project.border.spacing.roundToInt()}px",
                                 value = project.border.spacing,
                                 valueRange = 0f..36f,
                                 onValueChange = { s -> viewModel.updateBorder { it.copy(spacing = s) } },
                             )
                             LabeledSlider(
-                                label = stringResource(R.string.editor_border_padding),
+                                label = strings.borderPadding,
                                 valueText = "${project.border.padding.roundToInt()}px",
                                 value = project.border.padding,
                                 valueRange = 0f..48f,
                                 onValueChange = { p -> viewModel.updateBorder { it.copy(padding = p) } },
                             )
                             CxSwitchRow(
-                                title = "Soft Cell Shadow",
+                                title = strings.softCellShadow,
                                 checked = project.border.shadowEnabled,
                                 onCheckedChange = { on -> viewModel.updateBorder { it.copy(shadowEnabled = on) } },
                             )
                         }
 
                         EditorSectionTab.BACKGROUND -> {
-                            Text("Solid Pastel Palette", style = CxType.CaptionMedium, color = colors.text)
+                            Text(strings.solidPalette, style = CxType.CaptionMedium, color = colors.text)
                             ColorSwatchRow(
                                 colorsList = PastelBgColors,
                                 selectedColor = if (project.background.type == BackgroundType.SOLID) project.background.primaryColor else -999,
@@ -503,11 +686,11 @@ fun EditorScreen(
                                     }
                                 },
                             )
-                            Text("Pastel Gradients & Image", style = CxType.CaptionMedium, color = colors.text)
+                            Text(strings.gradientsAndImage, style = CxType.CaptionMedium, color = colors.text)
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(CxSpace.S8)) {
                                 item {
                                     CxChip(
-                                        label = "Pick Image",
+                                        label = strings.pickImage,
                                         selected = project.background.type == BackgroundType.IMAGE,
                                         leadingIcon = Icons.Rounded.Image,
                                         onClick = {
@@ -547,7 +730,7 @@ fun EditorScreen(
                                 }
                             }
                             LabeledSlider(
-                                label = "Paper Texture",
+                                label = strings.paperTexture,
                                 valueText = "${(project.background.textureIntensity * 100).roundToInt()}%",
                                 value = project.background.textureIntensity,
                                 valueRange = 0f..1f,
@@ -574,7 +757,7 @@ fun EditorScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 EditorToolbarItem(
-                    label = stringResource(R.string.editor_tool_text),
+                    label = strings.editorToolText,
                     icon = Icons.Rounded.TextFields,
                     selected = showTextSheet,
                     onClick = { showTextSheet = true },
@@ -582,7 +765,7 @@ fun EditorScreen(
                     testTag = "editor_tool_text",
                 )
                 EditorToolbarItem(
-                    label = stringResource(R.string.editor_tool_sticker),
+                    label = strings.editorToolSticker,
                     icon = Icons.Rounded.EmojiEmotions,
                     selected = showStickerSheet,
                     onClick = { showStickerSheet = true },
@@ -590,7 +773,7 @@ fun EditorScreen(
                     testTag = "editor_tool_sticker",
                 )
                 EditorToolbarItem(
-                    label = stringResource(R.string.editor_tool_filter),
+                    label = strings.editorToolFilter,
                     icon = Icons.Rounded.AutoFixHigh,
                     selected = showFilterSheet,
                     onClick = {
@@ -609,7 +792,7 @@ fun EditorScreen(
                     testTag = "editor_tool_filter",
                 )
                 EditorToolbarItem(
-                    label = stringResource(R.string.editor_tool_background),
+                    label = strings.editorToolBackground,
                     icon = Icons.Rounded.Gradient,
                     selected = activeSection == EditorSectionTab.BACKGROUND,
                     onClick = { activeSection = EditorSectionTab.BACKGROUND },
@@ -617,7 +800,7 @@ fun EditorScreen(
                     testTag = "editor_tool_background",
                 )
                 EditorToolbarItem(
-                    label = stringResource(R.string.editor_tool_more),
+                    label = strings.editorToolMore,
                     icon = Icons.Rounded.MoreHoriz,
                     selected = showMoreSheet,
                     onClick = { showMoreSheet = true },
@@ -634,6 +817,7 @@ fun EditorScreen(
         val editingText = selectedLayer?.takeIf { it.type == LayerType.TEXT }
         TextEditorSheet(
             initialStyle = editingText?.textStyle,
+            isLocked = editingText?.locked ?: false,
             onDismiss = { showTextSheet = false },
             onApply = { style ->
                 if (editingText != null) {
@@ -644,13 +828,25 @@ fun EditorScreen(
                     viewModel.addTextLayer(style)
                 }
             },
+            onToggleLock = editingText?.let { target ->
+                { viewModel.toggleLayerLock(target.id) }
+            },
+            onRequestDelete = editingText?.let { target ->
+                { pendingDeleteLayer = target }
+            },
         )
     }
 
     if (showStickerSheet) {
+        val existingStickers = remember(project.layers) {
+            project.layers.filter { it.type == LayerType.STICKER }.sortedByDescending { it.zIndex }
+        }
         StickerPickerSheet(
+            existingStickers = existingStickers,
             onDismiss = { showStickerSheet = false },
             onAddSticker = { kind, color -> viewModel.addStickerLayer(kind, color) },
+            onToggleStickerLock = { id -> viewModel.toggleLayerLock(id) },
+            onRequestDeleteSticker = { stickerLayer -> pendingDeleteLayer = stickerLayer },
         )
     }
 
@@ -701,8 +897,9 @@ fun EditorScreen(
             },
             onSwapPhoto = { viewModel.toggleSwapMode() },
             onDuplicate = { viewModel.duplicateLayer(selectedLayer.id) },
+            onToggleLock = { viewModel.toggleLayerLock(selectedLayer.id) },
             onReset = { viewModel.resetSelectedLayer() },
-            onDelete = { viewModel.deleteLayer(selectedLayer.id) },
+            onDelete = { pendingDeleteLayer = selectedLayer },
         )
     }
 
@@ -727,7 +924,98 @@ fun EditorScreen(
             onMoveLayerOrder = { id, delta -> viewModel.moveLayerOrder(id, delta) },
             onToggleLayerLock = { id -> viewModel.toggleLayerLock(id) },
             onToggleLayerVisibility = { id -> viewModel.toggleLayerVisibility(id) },
-            onDeleteLayer = { id -> viewModel.deleteLayer(id) },
+            onDeleteLayer = { id ->
+                project.layers.firstOrNull { it.id == id }?.let { target ->
+                    showMoreSheet = false
+                    pendingDeleteLayer = target
+                }
+            },
+        )
+    }
+
+    if (showAutoFitSheet) {
+        AutoFitStudioSheet(
+            project = project,
+            currentPreset = editorState.autoFitPreset,
+            autoFitEnabled = editorState.autoFitEnabled,
+            onDismiss = { showAutoFitSheet = false },
+            onToggleAutoFitEnabled = { enabled -> viewModel.setAutoFitEnabled(enabled) },
+            onApplyAutoFit = { preset, targetCanvas ->
+                viewModel.applyAutoFit(preset, targetCanvas)
+            },
+            onOpenCustomSize = onOpenCustomSize,
+        )
+    }
+
+    // Delete vs. Don't Delete (Keep / Protect) Confirmation Dialog for Photos, Text & Stickers
+    pendingDeleteLayer?.let { target ->
+        val kindName = strings.layerKindLabel(target.type)
+        val itemName = target.label.ifBlank { kindName }
+        AlertDialog(
+            onDismissRequest = { pendingDeleteLayer = null },
+            containerColor = colors.surface,
+            title = {
+                Text(
+                    text = if (target.locked) "$kindName · ${strings.protectedLabel}" else "${strings.deleteLabel} $kindName?",
+                    style = CxType.Heading,
+                    color = colors.text,
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(CxSpace.S8)) {
+                    Text(
+                        text = if (target.locked) {
+                            "\"$itemName\" — ${strings.protectedConfirmMsg}"
+                        } else {
+                            "\"$itemName\" — ${strings.deleteConfirmMsg}"
+                        },
+                        style = CxType.Body,
+                        color = colors.textMuted,
+                    )
+                    if (!target.locked) {
+                        CxChip(
+                            label = strings.markDontDelete,
+                            selected = false,
+                            leadingIcon = Icons.Rounded.Lock,
+                            onClick = {
+                                viewModel.toggleLayerLock(target.id)
+                                pendingDeleteLayer = null
+                            },
+                            testTag = "confirm_dialog_protect_layer",
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteLayer(target.id, forceUnlock = true)
+                        pendingDeleteLayer = null
+                    },
+                    modifier = Modifier.testTag("confirm_dialog_delete_button"),
+                ) {
+                    Text(
+                        text = if (target.locked) strings.unlockAndDelete else strings.deleteLabel,
+                        color = colors.danger,
+                        style = CxType.BodyMedium,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingDeleteLayer = null
+                        viewModel.showToast("${strings.keepLabel}: $kindName")
+                    },
+                    modifier = Modifier.testTag("confirm_dialog_keep_button"),
+                ) {
+                    Text(
+                        text = strings.dontDeleteLabel,
+                        color = colors.primary,
+                        style = CxType.BodyMedium,
+                    )
+                }
+            },
         )
     }
 }

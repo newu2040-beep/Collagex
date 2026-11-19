@@ -140,6 +140,7 @@ fun HomeScreen(
     bottomPadding: PaddingValues,
 ) {
     val colors = CollageXThemeTokens.colors
+    val strings = CollageXThemeTokens.strings
     var showTemplatesSheet by remember { mutableStateOf(false) }
     var showLayoutsSheet by remember { mutableStateOf(false) }
     var showToolsSheet by remember { mutableStateOf(false) }
@@ -175,7 +176,7 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(CxSpace.S4),
                 ) {
                     Text(
-                        text = stringResource(R.string.home_greeting_prefix),
+                        text = strings.homeGreetingPrefix,
                         style = CxType.Heading,
                         color = colors.textMuted,
                     )
@@ -187,7 +188,7 @@ fun HomeScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = stringResource(R.string.home_subtitle),
+                        text = strings.homeSubtitle,
                         style = CxType.Caption,
                         color = colors.textMuted,
                         maxLines = 2,
@@ -236,7 +237,7 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.spacedBy(CxSpace.S8),
                         ) {
                             Text(
-                                text = stringResource(R.string.home_new_collage),
+                                text = strings.homeNewCollage,
                                 style = CxType.Title,
                                 color = Color.White,
                             )
@@ -245,7 +246,7 @@ fun HomeScreen(
                                 horizontalArrangement = Arrangement.spacedBy(CxSpace.S4),
                             ) {
                                 Text(
-                                    text = stringResource(R.string.home_start_creating),
+                                    text = strings.homeStartCreating,
                                     style = CxType.CaptionMedium,
                                     color = Color.White.copy(alpha = 0.92f),
                                 )
@@ -303,8 +304,8 @@ fun HomeScreen(
         item {
             Column(verticalArrangement = Arrangement.spacedBy(CxSpace.S12)) {
                 SectionHeaderRow(
-                    title = stringResource(R.string.home_quick_tools),
-                    actionLabel = stringResource(R.string.action_see_all),
+                    title = strings.homeQuickTools,
+                    actionLabel = strings.actionSeeAll,
                     onAction = { showToolsSheet = true },
                 )
                 Row(
@@ -312,7 +313,7 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(CxSpace.S12),
                 ) {
                     QuickToolTile(
-                        label = stringResource(R.string.tool_templates),
+                        label = strings.toolTemplates,
                         icon = Icons.Rounded.GridView,
                         containerColor = colors.toolPink,
                         iconTint = colors.primary,
@@ -321,7 +322,7 @@ fun HomeScreen(
                         testTag = "quick_tool_templates",
                     )
                     QuickToolTile(
-                        label = stringResource(R.string.tool_gallery),
+                        label = strings.toolGallery,
                         icon = Icons.Rounded.PhotoLibrary,
                         containerColor = colors.toolBlue,
                         iconTint = colors.text,
@@ -330,7 +331,7 @@ fun HomeScreen(
                         testTag = "quick_tool_gallery",
                     )
                     QuickToolTile(
-                        label = stringResource(R.string.tool_layout),
+                        label = strings.toolLayout,
                         icon = Icons.Rounded.Dashboard,
                         containerColor = colors.toolPeach,
                         iconTint = colors.text,
@@ -339,7 +340,7 @@ fun HomeScreen(
                         testTag = "quick_tool_layout",
                     )
                     QuickToolTile(
-                        label = stringResource(R.string.tool_tools),
+                        label = strings.toolTools,
                         icon = Icons.Rounded.Build,
                         containerColor = colors.toolLavender,
                         iconTint = colors.text,
@@ -354,15 +355,15 @@ fun HomeScreen(
         // 4. Recent Collages
         item {
             SectionHeaderRow(
-                title = stringResource(R.string.home_recent_collages),
-                actionLabel = stringResource(R.string.action_see_all),
+                title = strings.homeRecentCollages,
+                actionLabel = strings.actionSeeAll,
                 onAction = onSeeAllProjects,
             )
         }
 
         when (projectsState) {
             is UiState.Loading -> {
-                item { CxLoadingState("Loading your collages…") }
+                item { CxLoadingState(strings.loadingCollages) }
             }
             is UiState.Error -> {
                 item { CxErrorState(projectsState.message) }
@@ -373,9 +374,9 @@ fun HomeScreen(
                     item {
                         CxEmptyState(
                             icon = Icons.Rounded.Collections,
-                            title = "No collages yet",
-                            message = "Pick 2 to 50+ photos from your gallery, or launch a starter collage to explore the editor right away.",
-                            actionLabel = "Try Starter Collage",
+                            title = strings.noCollagesTitle,
+                            message = strings.noCollagesMsg,
+                            actionLabel = strings.tryStarterCollage,
                             onAction = {
                                 onCreateSampleCollage("Kyoto Memories", LayoutType.BENTO, CanvasSpec(3000.0, 2000.0))
                             },
@@ -422,9 +423,9 @@ fun HomeScreen(
                     .padding(horizontal = CxSpace.S16, vertical = CxSpace.S12),
                 verticalArrangement = Arrangement.spacedBy(CxSpace.S12),
             ) {
-                Text("Starter Templates", style = CxType.Heading, color = colors.text)
+                Text(strings.starterTemplatesTitle, style = CxType.Heading, color = colors.text)
                 Text(
-                    "Choose a layout preset and start with your photos or sample scenes.",
+                    strings.starterTemplatesSubtitle,
                     style = CxType.Caption,
                     color = colors.textMuted,
                 )
@@ -456,15 +457,11 @@ fun HomeScreen(
                     .padding(horizontal = CxSpace.S16, vertical = CxSpace.S12),
                 verticalArrangement = Arrangement.spacedBy(CxSpace.S12),
             ) {
-                Text("Create with Layout", style = CxType.Heading, color = colors.text)
+                Text(strings.createWithLayoutTitle, style = CxType.Heading, color = colors.text)
                 LayoutType.entries.forEach { layout ->
                     CxListItem(
-                        title = layout.label,
-                        subtitle = if (layout == LayoutType.MOSAIC || layout == LayoutType.GRID) {
-                            "Supports 2 to 50+ photos cleanly"
-                        } else {
-                            "Tap to pick photos and open in ${layout.label}"
-                        },
+                        title = strings.layoutLabel(layout),
+                        subtitle = strings.pickPhotosFromGallery,
                         leadingIcon = Icons.Rounded.Dashboard,
                         onClick = {
                             showLayoutsSheet = false
@@ -489,10 +486,10 @@ fun HomeScreen(
                     .padding(horizontal = CxSpace.S16, vertical = CxSpace.S12),
                 verticalArrangement = Arrangement.spacedBy(CxSpace.S12),
             ) {
-                Text("Collage Tools", style = CxType.Heading, color = colors.text)
+                Text(strings.collageToolsTitle, style = CxType.Heading, color = colors.text)
                 CxListItem(
-                    title = "Pick 2–50+ Photos",
-                    subtitle = "Multi-select via Android Photo Picker",
+                    title = strings.pickPhotosFromGallery,
+                    subtitle = strings.galleryPickerTitle,
                     leadingIcon = Icons.Rounded.PhotoLibrary,
                     onClick = {
                         showToolsSheet = false
@@ -500,8 +497,8 @@ fun HomeScreen(
                     },
                 )
                 CxListItem(
-                    title = "Try 6-Photo Starter Collage",
-                    subtitle = "Explore layouts, custom sizing, and export immediately",
+                    title = strings.starterPackTitle,
+                    subtitle = strings.starterPackSubtitle,
                     leadingIcon = Icons.Rounded.AutoAwesomeMosaic,
                     onClick = {
                         showToolsSheet = false
@@ -509,7 +506,7 @@ fun HomeScreen(
                     },
                 )
                 CxListItem(
-                    title = "Print-Ready A4 Collage (300 DPI)",
+                    title = strings.printReadyA4Title,
                     subtitle = "210 × 297 mm · 2480 × 3508 px",
                     leadingIcon = Icons.Rounded.AspectRatio,
                     onClick = {
@@ -574,6 +571,7 @@ fun ProjectsTabScreen(
     bottomPadding: PaddingValues,
 ) {
     val colors = CollageXThemeTokens.colors
+    val strings = CollageXThemeTokens.strings
     var query by remember { mutableStateOf("") }
     var filterMode by remember { mutableStateOf("ALL") } // ALL, FAVORITES, ARCHIVED
     var sortMode by remember { mutableStateOf("RECENT") } // RECENT, NAME, PHOTOS
@@ -594,28 +592,28 @@ fun ProjectsTabScreen(
         verticalArrangement = Arrangement.spacedBy(CxSpace.S16),
     ) {
         item {
-            Text(text = "Projects & Layouts", style = CxType.Title, color = colors.text)
+            Text(text = strings.projectsTitle, style = CxType.Title, color = colors.text)
         }
         item {
             CxTextField(
                 label = "",
                 value = query,
                 onValueChange = { query = it },
-                placeholder = "Search collages…",
+                placeholder = strings.searchCollagesPlaceholder,
                 testTag = "projects_search_input",
             )
         }
         item {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(CxSpace.S8)) {
-                item { CxChip("All", filterMode == "ALL", { filterMode = "ALL" }) }
-                item { CxChip("Favorites", filterMode == "FAVORITES", { filterMode = "FAVORITES" }) }
-                item { CxChip("Archived", filterMode == "ARCHIVED", { filterMode = "ARCHIVED" }) }
+                item { CxChip(strings.filterAll, filterMode == "ALL", { filterMode = "ALL" }) }
+                item { CxChip(strings.filterFavorites, filterMode == "FAVORITES", { filterMode = "FAVORITES" }) }
+                item { CxChip(strings.filterArchived, filterMode == "ARCHIVED", { filterMode = "ARCHIVED" }) }
                 item {
                     CxChip(
                         label = when (sortMode) {
-                            "NAME" -> "Sort: A–Z"
-                            "PHOTOS" -> "Sort: Photos"
-                            else -> "Sort: Recent"
+                            "NAME" -> strings.sortName
+                            "PHOTOS" -> strings.sortPhotos
+                            else -> strings.sortRecent
                         },
                         selected = true,
                         onClick = {
@@ -631,7 +629,7 @@ fun ProjectsTabScreen(
         }
 
         when (projectsState) {
-            is UiState.Loading -> item { CxLoadingState("Loading projects…") }
+            is UiState.Loading -> item { CxLoadingState(strings.loadingProjects) }
             is UiState.Error -> item { CxErrorState(projectsState.message) }
             is UiState.Success -> {
                 val filtered = projectsState.data
@@ -655,9 +653,9 @@ fun ProjectsTabScreen(
                     item {
                         CxEmptyState(
                             icon = Icons.Rounded.Collections,
-                            title = "No matching projects",
-                            message = "Create a new collage or adjust your search filter.",
-                            actionLabel = "Create Collage",
+                            title = strings.noMatchingProjectsTitle,
+                            message = strings.noMatchingProjectsMsg,
+                            actionLabel = strings.navCreate,
                             onAction = onCreateNew,
                         )
                     }
@@ -727,6 +725,7 @@ fun ExportsTabScreen(
     bottomPadding: PaddingValues,
 ) {
     val colors = CollageXThemeTokens.colors
+    val strings = CollageXThemeTokens.strings
     val context = LocalContext.current
     val dateFmt = remember { SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()) }
 
@@ -745,9 +744,9 @@ fun ExportsTabScreen(
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(CxSpace.S4)) {
-                Text(text = "Activity & Exports", style = CxType.Title, color = colors.text)
+                Text(text = strings.exportsTitle, style = CxType.Title, color = colors.text)
                 Text(
-                    text = "High-resolution exports with zero watermarks.",
+                    text = strings.exportsSubtitle,
                     style = CxType.Caption,
                     color = colors.textMuted,
                 )
@@ -755,7 +754,7 @@ fun ExportsTabScreen(
         }
 
         when (exportsState) {
-            is UiState.Loading -> item { CxLoadingState("Loading export history…") }
+            is UiState.Loading -> item { CxLoadingState(strings.loadingExports) }
             is UiState.Error -> item { CxErrorState(exportsState.message) }
             is UiState.Success -> {
                 val list = exportsState.data
@@ -763,8 +762,8 @@ fun ExportsTabScreen(
                     item {
                         CxEmptyState(
                             icon = Icons.Rounded.FileDownloadDone,
-                            title = "No exports yet",
-                            message = "Open any collage in the editor and tap Export to save JPEG, PNG, WebP, TIFF, or PDF.",
+                            title = strings.noExportsTitle,
+                            message = strings.noExportsMsg,
                         )
                     }
                 } else {
@@ -801,7 +800,7 @@ fun ExportsTabScreen(
                                     if (!rec.localUri.isNullOrBlank()) {
                                         CxIconButton(
                                             icon = Icons.Rounded.OpenInNew,
-                                            contentDescription = "Open exported file",
+                                            contentDescription = strings.exportOpen,
                                             onClick = {
                                                 val intent = Intent(Intent.ACTION_VIEW).apply {
                                                     setDataAndType(Uri.parse(rec.localUri), rec.format.mimeType)
@@ -813,7 +812,7 @@ fun ExportsTabScreen(
                                         )
                                         CxIconButton(
                                             icon = Icons.Rounded.Share,
-                                            contentDescription = "Share exported file",
+                                            contentDescription = strings.exportDirectShare,
                                             onClick = {
                                                 val intent = Intent(Intent.ACTION_SEND).apply {
                                                     type = rec.format.mimeType
@@ -821,14 +820,14 @@ fun ExportsTabScreen(
                                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                                 }
                                                 runCatching {
-                                                    context.startActivity(Intent.createChooser(intent, "Share Collage"))
+                                                    context.startActivity(Intent.createChooser(intent, strings.exportDirectShare))
                                                 }
                                             },
                                         )
                                     }
                                     CxIconButton(
                                         icon = Icons.Rounded.Delete,
-                                        contentDescription = "Remove export record",
+                                        contentDescription = strings.deleteLabel,
                                         onClick = { onDeleteExport(rec.id) },
                                         tint = colors.textMuted,
                                     )
@@ -965,6 +964,7 @@ private fun ProjectThumbnailCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = CollageXThemeTokens.colors
+    val strings = CollageXThemeTokens.strings
     var menuExpanded by remember { mutableStateOf(false) }
     val dims = remember(project.canvas) { CanvasMath.toPixelDimensions(project.canvas) }
 
@@ -1027,22 +1027,22 @@ private fun ProjectThumbnailCard(
                     onDismissRequest = { menuExpanded = false },
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Resize Canvas", style = CxType.Body) },
+                        text = { Text(strings.menuResizeCanvas, style = CxType.Body) },
                         leadingIcon = { Icon(Icons.Rounded.AspectRatio, null) },
                         onClick = { menuExpanded = false; onResize() },
                     )
                     DropdownMenuItem(
-                        text = { Text("Rename", style = CxType.Body) },
+                        text = { Text(strings.menuRename, style = CxType.Body) },
                         leadingIcon = { Icon(Icons.Rounded.Edit, null) },
                         onClick = { menuExpanded = false; onRename() },
                     )
                     DropdownMenuItem(
-                        text = { Text("Duplicate", style = CxType.Body) },
+                        text = { Text(strings.menuDuplicate, style = CxType.Body) },
                         leadingIcon = { Icon(Icons.Rounded.ContentCopy, null) },
                         onClick = { menuExpanded = false; onDuplicate() },
                     )
                     DropdownMenuItem(
-                        text = { Text(if (project.favorite) "Unfavorite" else "Favorite", style = CxType.Body) },
+                        text = { Text(if (project.favorite) strings.menuUnfavorite else strings.menuFavorite, style = CxType.Body) },
                         leadingIcon = {
                             Icon(if (project.favorite) Icons.Rounded.FavoriteBorder else Icons.Rounded.Favorite, null)
                         },
@@ -1050,13 +1050,13 @@ private fun ProjectThumbnailCard(
                     )
                     if (onToggleArchive != null) {
                         DropdownMenuItem(
-                            text = { Text(if (project.archived) "Unarchive" else "Archive", style = CxType.Body) },
+                            text = { Text(if (project.archived) strings.menuUnarchive else strings.menuArchive, style = CxType.Body) },
                             leadingIcon = { Icon(Icons.Rounded.Archive, null) },
                             onClick = { menuExpanded = false; onToggleArchive() },
                         )
                     }
                     DropdownMenuItem(
-                        text = { Text("Delete…", style = CxType.Body, color = colors.danger) },
+                        text = { Text("${strings.deleteLabel}…", style = CxType.Body, color = colors.danger) },
                         leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = colors.danger) },
                         onClick = { menuExpanded = false; onRequestDelete() },
                     )
@@ -1080,13 +1080,13 @@ private fun ProjectThumbnailCard(
                 )
                 Icon(
                     imageVector = if (project.cloudBackedUp) Icons.Rounded.CloudDone else Icons.Rounded.CloudOff,
-                    contentDescription = if (project.cloudBackedUp) "Cloud synced" else "Local only",
+                    contentDescription = if (project.cloudBackedUp) strings.syncedStatus else strings.savedStatus,
                     tint = if (project.cloudBackedUp) colors.success else colors.textMuted,
                     modifier = Modifier.size(14.dp),
                 )
             }
             Text(
-                text = "${project.photoCount} photos · ${dims.widthPx}×${dims.heightPx}",
+                text = "${project.photoCount} ${strings.photosWord} · ${dims.widthPx}×${dims.heightPx}",
                 style = CxType.Caption,
                 color = colors.textMuted,
                 maxLines = 1,
@@ -1102,13 +1102,14 @@ private fun RenameProjectDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
+    val strings = CollageXThemeTokens.strings
     var title by remember(currentTitle) { mutableStateOf(currentTitle) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Rename Collage", style = CxType.Heading) },
+        title = { Text(strings.renameCollageTitle, style = CxType.Heading) },
         text = {
             CxTextField(
-                label = "Project title",
+                label = strings.projectTitleLabel,
                 value = title,
                 onValueChange = { title = it.take(120) },
                 testTag = "rename_project_input",
@@ -1116,11 +1117,11 @@ private fun RenameProjectDialog(
         },
         confirmButton = {
             TextButton(onClick = { if (title.isNotBlank()) onConfirm(title) }) {
-                Text("Save")
+                Text(strings.saveLabel)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(strings.cancelLabel) }
         },
     )
 }
@@ -1134,26 +1135,27 @@ private fun DeleteProjectDialog(
     onDeleteBoth: () -> Unit,
 ) {
     val colors = CollageXThemeTokens.colors
+    val strings = CollageXThemeTokens.strings
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete \"${project.title}\"?", style = CxType.Heading) },
+        title = { Text("${strings.deleteLabel} \"${project.title}\"?", style = CxType.Heading) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(CxSpace.S8)) {
                 Text(
-                    text = "Choose whether to remove only the local copy on this device or also delete its cloud backup.",
+                    text = strings.deleteProjectMsg,
                     style = CxType.Body,
                     color = colors.textMuted,
                 )
-                CxSecondaryButton(text = "Remove Local Copy Only", onClick = onDeleteLocal)
+                CxSecondaryButton(text = strings.removeLocalOnly, onClick = onDeleteLocal)
                 if (project.cloudBackedUp) {
-                    CxSecondaryButton(text = "Delete Cloud Backup Only", onClick = onDeleteCloud)
+                    CxSecondaryButton(text = strings.deleteCloudOnly, onClick = onDeleteCloud)
                 }
-                CxPrimaryButton(text = "Delete Local & Cloud", onClick = onDeleteBoth)
+                CxPrimaryButton(text = strings.deleteLocalAndCloud, onClick = onDeleteBoth)
             }
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(strings.cancelLabel) }
         },
     )
 }

@@ -72,6 +72,8 @@ import com.example.core.model.CanvasSpec
 import com.example.core.model.CollageProject
 import com.example.core.model.DimensionUnit
 import com.example.core.model.ResizeMode
+import com.example.engine.AutoFitEngine
+import com.example.engine.AutoFitPreset
 import com.example.feature.editor.CollageCanvasPreview
 import com.example.ui.theme.CollageXThemeTokens
 import java.util.Locale
@@ -87,11 +89,13 @@ private val CommonDpiValues = listOf(72, 96, 150, 300)
 @Composable
 fun CustomSizeScreen(
     project: CollageProject,
+    autoFitPreset: AutoFitPreset = AutoFitPreset.BALANCED,
     onBack: () -> Unit,
     onGoHome: () -> Unit,
-    onApplyChanges: (CanvasSpec) -> Unit,
+    onApplyChanges: (CanvasSpec, Boolean) -> Unit,
 ) {
     val colors = CollageXThemeTokens.colors
+    val strings = CollageXThemeTokens.strings
     val initial = project.canvas
 
     var unit by remember(project.id) { mutableStateOf(initial.unit) }
@@ -114,6 +118,7 @@ fun CustomSizeScreen(
         mutableDoubleStateOf(if (initial.height > 0.0) initial.width / initial.height else 1.5)
     }
     var resizeMode by remember(project.id) { mutableStateOf(initial.resizeMode) }
+    var autoFitLayout by remember(project.id) { mutableStateOf(true) }
     var selectedPresetId by remember { mutableStateOf<String?>(null) }
 
     val orientation = if (heightVal >= widthVal) CanvasOrientation.PORTRAIT else CanvasOrientation.LANDSCAPE
@@ -129,12 +134,20 @@ fun CustomSizeScreen(
     )
     val validation = remember(draftSpec) { CanvasMath.validate(draftSpec) }
 
-    val previewProject = remember(project, draftSpec) {
+    val previewProject = remember(project, draftSpec, autoFitLayout, autoFitPreset) {
         if (validation.valid) {
-            project.copy(
-                canvas = draftSpec,
-                layers = CanvasMath.adaptLayersForResize(project.layers, project.canvas, draftSpec, resizeMode),
-            )
+            if (autoFitLayout) {
+                AutoFitEngine.applyToProject(
+                    project = project,
+                    preset = autoFitPreset,
+                    targetCanvas = draftSpec,
+                )
+            } else {
+                project.copy(
+                    canvas = draftSpec,
+                    layers = CanvasMath.adaptLayersForResize(project.layers, project.canvas, draftSpec, resizeMode),
+                )
+            }
         } else {
             project
         }
@@ -157,7 +170,7 @@ fun CustomSizeScreen(
             .imePadding(),
     ) {
         CxTopBar(
-            title = stringResource(R.string.custom_size_title),
+            title = strings.customSizeTitle,
             onBack = onBack,
             actions = {
                 CxIconButton(
@@ -183,12 +196,12 @@ fun CustomSizeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Live Resize Preview", style = CxType.BodyMedium, color = colors.text)
+                    Text(strings.liveResizePreview, style = CxType.BodyMedium, color = colors.text)
                     Text(
                         text = if (validation.valid) {
                             "${validation.pixels.widthPx} × ${validation.pixels.heightPx} px"
                         } else {
-                            "Invalid size"
+                            strings.invalidSize
                         },
                         style = CxType.CaptionMedium,
                         color = if (validation.valid) colors.primary else colors.danger,
@@ -211,7 +224,7 @@ fun CustomSizeScreen(
                     )
                 }
                 Text(
-                    text = "${resizeMode.label}: ${resizeMode.description}",
+                    text = "${strings.resizeModeLabel(resizeMode)}: ${resizeMode.description}",
                     style = CxType.Caption,
                     color = colors.textMuted,
                 )
@@ -220,7 +233,7 @@ fun CustomSizeScreen(
             // 1. Aspect Ratio Presets (3x2 grid matching mockup + Print presets row)
             Column(verticalArrangement = Arrangement.spacedBy(CxSpace.S12)) {
                 Text(
-                    text = stringResource(R.string.custom_size_presets),
+                    text = strings.customSizePresets,
                     style = CxType.Heading,
                     color = colors.text,
                 )
@@ -265,7 +278,7 @@ fun CustomSizeScreen(
             // 2. Custom Dimensions Section matching mockup
             Column(verticalArrangement = Arrangement.spacedBy(CxSpace.S12)) {
                 Text(
-                    text = stringResource(R.string.custom_size_dimensions),
+                    text = strings.customSizeDimensions,
                     style = CxType.Heading,
                     color = colors.text,
                 )
@@ -293,7 +306,7 @@ fun CustomSizeScreen(
                     horizontalArrangement = Arrangement.spacedBy(CxSpace.S8),
                 ) {
                     CxTextField(
-                        label = stringResource(R.string.custom_size_width),
+                        label = strings.customSizeWidth,
                         value = widthText,
                         onValueChange = { raw ->
                             val clean = raw.filter { it.isDigit() || it == '.' }
@@ -330,7 +343,7 @@ fun CustomSizeScreen(
                     )
 
                     CxTextField(
-                        label = stringResource(R.string.custom_size_height),
+                        label = strings.customSizeHeight,
                         value = heightText,
                         onValueChange = { raw ->
                             val clean = raw.filter { it.isDigit() || it == '.' }
@@ -361,7 +374,7 @@ fun CustomSizeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        text = stringResource(R.string.custom_size_dpi),
+                        text = strings.customSizeDpi,
                         style = CxType.BodyMedium,
                         color = colors.text,
                     )
@@ -398,7 +411,7 @@ fun CustomSizeScreen(
                                 )
                             }
                             DropdownMenuItem(
-                                text = { Text("Custom DPI…", style = CxType.Body) },
+                                text = { Text(strings.customDpiOption, style = CxType.Body) },
                                 onClick = {
                                     customDpiMode = true
                                     dpiMenuExpanded = false
@@ -410,7 +423,7 @@ fun CustomSizeScreen(
 
                 if (customDpiMode) {
                     CxTextField(
-                        label = "Custom DPI (36 – 1200)",
+                        label = "${strings.customSizeDpi} (36 – 1200)",
                         value = customDpiText,
                         onValueChange = { raw ->
                             val clean = raw.filter { it.isDigit() }.take(4)
@@ -425,7 +438,7 @@ fun CustomSizeScreen(
 
                 // Orientation Segmented Toggle (Portrait | Landscape) matching mockup
                 Text(
-                    text = stringResource(R.string.custom_size_orientation),
+                    text = strings.customSizeOrientation,
                     style = CxType.BodyMedium,
                     color = colors.text,
                 )
@@ -434,7 +447,7 @@ fun CustomSizeScreen(
                     horizontalArrangement = Arrangement.spacedBy(CxSpace.S8),
                 ) {
                     CxChip(
-                        label = stringResource(R.string.custom_size_portrait),
+                        label = strings.customSizePortrait,
                         selected = orientation == CanvasOrientation.PORTRAIT,
                         leadingIcon = Icons.Rounded.StayCurrentPortrait,
                         onClick = {
@@ -446,7 +459,7 @@ fun CustomSizeScreen(
                         testTag = "orientation_portrait",
                     )
                     CxChip(
-                        label = stringResource(R.string.custom_size_landscape),
+                        label = strings.customSizeLandscape,
                         selected = orientation == CanvasOrientation.LANDSCAPE,
                         leadingIcon = Icons.Rounded.StayCurrentLandscape,
                         onClick = {
@@ -460,11 +473,11 @@ fun CustomSizeScreen(
                 }
 
                 // Resize Behavior Controls (Fit, Fill, Crop, Extend + Switches matching mockup)
-                Text("Content Resize Mode", style = CxType.BodyMedium, color = colors.text)
+                Text(strings.contentResizeMode, style = CxType.BodyMedium, color = colors.text)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(CxSpace.S8)) {
                     items(ResizeMode.entries) { mode ->
                         CxChip(
-                            label = mode.label,
+                            label = strings.resizeModeLabel(mode),
                             selected = resizeMode == mode,
                             onClick = { resizeMode = mode },
                             testTag = "resize_mode_${mode.name}",
@@ -474,7 +487,7 @@ fun CustomSizeScreen(
 
                 CxCard(contentPadding = PaddingValues(horizontal = CxSpace.S12, vertical = CxSpace.S4)) {
                     CxSwitchRow(
-                        title = stringResource(R.string.custom_size_maintain_ratio),
+                        title = strings.customSizeMaintainRatio,
                         checked = aspectLocked,
                         onCheckedChange = { locked ->
                             aspectLocked = locked
@@ -483,8 +496,15 @@ fun CustomSizeScreen(
                         testTag = "switch_maintain_aspect",
                     )
                     CxSwitchRow(
-                        title = stringResource(R.string.custom_size_extend_canvas),
-                        subtitle = "Fill new area with background instead of scaling",
+                        title = strings.autoFitLayoutCorners,
+                        subtitle = strings.autoFitLayoutCornersSub,
+                        checked = autoFitLayout,
+                        onCheckedChange = { autoFitLayout = it },
+                        testTag = "switch_autofit_resize",
+                    )
+                    CxSwitchRow(
+                        title = strings.customSizeExtendCanvas,
+                        subtitle = strings.extendCanvasSub,
                         checked = resizeMode == ResizeMode.EXTEND,
                         onCheckedChange = { extend ->
                             resizeMode = if (extend) ResizeMode.EXTEND else ResizeMode.FIT
@@ -509,14 +529,14 @@ fun CustomSizeScreen(
                         ) {
                             Icon(Icons.Rounded.WarningAmber, contentDescription = null, tint = colors.danger)
                             Text(
-                                text = validation.errorMessage ?: "Invalid canvas dimensions.",
+                                text = validation.errorMessage ?: strings.invalidSize,
                                 style = CxType.CaptionMedium,
                                 color = colors.danger,
                             )
                         }
                     } else {
                         Text(
-                            text = "Output: ${validation.pixels.widthPx} × ${validation.pixels.heightPx} px " +
+                            text = "${strings.outputLabel}: ${validation.pixels.widthPx} × ${validation.pixels.heightPx} px " +
                                 "(${String.format(Locale.US, "%.1f", validation.pixels.megapixels)} MP @ $dpi DPI)",
                             style = CxType.CaptionMedium,
                             color = colors.text,
@@ -554,10 +574,10 @@ fun CustomSizeScreen(
                     .padding(CxSpace.S16),
             ) {
                 CxPrimaryButton(
-                    text = stringResource(R.string.custom_size_apply),
+                    text = strings.customSizeApply,
                     leadingIcon = Icons.Rounded.Check,
                     enabled = validation.valid,
-                    onClick = { onApplyChanges(draftSpec) },
+                    onClick = { onApplyChanges(draftSpec, autoFitLayout) },
                     testTag = "custom_size_apply_button",
                 )
             }

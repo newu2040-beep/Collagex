@@ -652,6 +652,7 @@ fun CxBottomNav(
     modifier: Modifier = Modifier,
 ) {
     val colors = CollageXThemeTokens.colors
+    val strings = CollageXThemeTokens.strings
     Surface(
         color = colors.surface,
         shadowElevation = 6.dp,
@@ -694,7 +695,7 @@ fun CxBottomNav(
                     selected = selectedTab == MainTab.HOME,
                     activeIcon = Icons.Rounded.Home,
                     inactiveIcon = Icons.Outlined.Home,
-                    label = stringResource(R.string.nav_home),
+                    label = strings.navHome,
                     onClick = { onSelectTab(MainTab.HOME) },
                     modifier = Modifier.weight(1f),
                     testTag = "nav_home",
@@ -703,7 +704,7 @@ fun CxBottomNav(
                     selected = selectedTab == MainTab.PROJECTS,
                     activeIcon = Icons.Rounded.GridView,
                     inactiveIcon = Icons.Outlined.GridView,
-                    label = stringResource(R.string.nav_projects),
+                    label = strings.navProjects,
                     onClick = { onSelectTab(MainTab.PROJECTS) },
                     modifier = Modifier.weight(1f),
                     testTag = "nav_projects",
@@ -724,7 +725,7 @@ fun CxBottomNav(
                             )
                             .clickable(
                                 role = Role.Button,
-                                onClickLabel = stringResource(R.string.nav_create),
+                                onClickLabel = strings.navCreate,
                                 onClick = onCreateClick,
                             )
                             .testTag("nav_create_fab"),
@@ -732,7 +733,7 @@ fun CxBottomNav(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Add,
-                            contentDescription = stringResource(R.string.nav_create),
+                            contentDescription = strings.navCreate,
                             tint = colors.onPrimary,
                             modifier = Modifier.size(CxSizing.IconSize),
                         )
@@ -742,7 +743,7 @@ fun CxBottomNav(
                     selected = selectedTab == MainTab.EXPORTS,
                     activeIcon = Icons.Rounded.BarChart,
                     inactiveIcon = Icons.Outlined.BarChart,
-                    label = stringResource(R.string.nav_exports),
+                    label = strings.navExports,
                     onClick = { onSelectTab(MainTab.EXPORTS) },
                     modifier = Modifier.weight(1f),
                     testTag = "nav_exports",
@@ -751,7 +752,7 @@ fun CxBottomNav(
                     selected = selectedTab == MainTab.SETTINGS,
                     activeIcon = Icons.Rounded.Settings,
                     inactiveIcon = Icons.Outlined.Settings,
-                    label = stringResource(R.string.nav_settings),
+                    label = strings.navSettings,
                     onClick = { onSelectTab(MainTab.SETTINGS) },
                     modifier = Modifier.weight(1f),
                     testTag = "nav_settings",
@@ -860,7 +861,7 @@ fun CxEmptyState(
 
 @Composable
 fun CxLoadingState(
-    message: String = "Loading…",
+    message: String = CollageXThemeTokens.strings.loadingLabel,
     modifier: Modifier = Modifier,
 ) {
     val colors = CollageXThemeTokens.colors
@@ -906,7 +907,7 @@ fun CxErrorState(
             )
             if (onRetry != null) {
                 CxSecondaryButton(
-                    text = "Try Again",
+                    text = CollageXThemeTokens.strings.tryAgainLabel,
                     onClick = onRetry,
                     testTag = "error_retry_button",
                 )
